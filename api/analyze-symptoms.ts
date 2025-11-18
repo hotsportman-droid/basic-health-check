@@ -1,6 +1,19 @@
 import { GoogleGenAI } from "@google/genai";
 
+export const config = {
+  runtime: 'edge',
+};
+
 export default async (req: Request) => {
+  const apiKey = process.env.API_KEY;
+
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'API Key is not configured in the environment.' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
@@ -18,11 +31,6 @@ export default async (req: Request) => {
       });
     }
 
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("API_KEY is not configured in the environment.");
-    }
-
     const ai = new GoogleGenAI({ apiKey });
     
     const response = await ai.models.generateContent({
@@ -38,23 +46,17 @@ export default async (req: Request) => {
     return new Response(JSON.stringify({ analysis }), {
       status: 200,
       headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' // Allow requests from any origin
+        'Content-Type': 'application/json'
       },
     });
 
   } catch (error) {
-    console.error('Error in serverless function:', error);
+    console.error('Error in Vercel function:', error);
     return new Response(JSON.stringify({ error: 'An internal error occurred.' }), {
       status: 500,
       headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Content-Type': 'application/json'
       },
     });
   }
-};
-
-export const config = {
-  path: "/api/analyze-symptoms",
 };
