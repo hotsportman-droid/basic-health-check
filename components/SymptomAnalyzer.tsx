@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrainIcon } from './icons';
 import { Modal } from './Modal';
 import { AdBanner } from './AdBanner';
+
+const MAX_DAILY_LIMIT = 5;
 
 export const SymptomAnalyzer: React.FC = () => {
   const [symptoms, setSymptoms] = useState('');
@@ -9,10 +11,33 @@ export const SymptomAnalyzer: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [dailyUsage, setDailyUsage] = useState(0);
+
+  useEffect(() => {
+    // Load usage data from local storage
+    const today = new Date().toDateString();
+    const storedDate = localStorage.getItem('shc_usage_date');
+    const storedCount = parseInt(localStorage.getItem('shc_usage_count') || '0', 10);
+
+    if (storedDate !== today) {
+      // Reset if it's a new day
+      localStorage.setItem('shc_usage_date', today);
+      localStorage.setItem('shc_usage_count', '0');
+      setDailyUsage(0);
+    } else {
+      setDailyUsage(storedCount);
+    }
+  }, []);
 
   const handleAnalyze = async () => {
     if (!symptoms.trim()) {
       setError('กรุณาป้อนอาการของคุณ');
+      setIsModalOpen(false);
+      return;
+    }
+
+    if (dailyUsage >= MAX_DAILY_LIMIT) {
+      setError(`คุณใช้วิเคราะห์ครบโควต้า ${MAX_DAILY_LIMIT} ครั้งต่อวันแล้ว กรุณากลับมาใหม่พรุ่งนี้`);
       setIsModalOpen(false);
       return;
     }
@@ -40,6 +65,11 @@ export const SymptomAnalyzer: React.FC = () => {
       
       setResult(data.analysis);
 
+      // Increment usage count on success
+      const newCount = dailyUsage + 1;
+      setDailyUsage(newCount);
+      localStorage.setItem('shc_usage_count', newCount.toString());
+
     } catch (err) {
       console.error(err);
       const errorMessage = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการวิเคราะห์ โปรดลองอีกครั้ง';
@@ -54,6 +84,10 @@ export const SymptomAnalyzer: React.FC = () => {
       setError('กรุณาป้อนอาการของคุณก่อน');
       return;
     }
+    if (dailyUsage >= MAX_DAILY_LIMIT) {
+       setError(`คุณใช้วิเคราะห์ครบโควต้า ${MAX_DAILY_LIMIT} ครั้งต่อวันแล้ว กรุณากลับมาใหม่พรุ่งนี้`);
+       return;
+    }
     setError(null);
     setIsModalOpen(true);
   }
@@ -62,12 +96,17 @@ export const SymptomAnalyzer: React.FC = () => {
     <>
       <div className="bg-white rounded-xl shadow-lg border border-slate-200/80 overflow-hidden flex flex-col h-full">
         <div className="p-6 flex-grow flex flex-col">
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mr-4 shrink-0">
-              <BrainIcon />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+                <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mr-4 shrink-0">
+                <BrainIcon />
+                </div>
+                <div>
+                <h3 className="text-xl font-bold text-slate-800">วิเคราะห์อาการป่วยเบื้องต้น (SHC)</h3>
+                </div>
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-800">วิเคราะห์อาการป่วยเบื้องต้น (SHC)</h3>
+            <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                โควต้าวันนี้: {dailyUsage}/{MAX_DAILY_LIMIT}
             </div>
           </div>
           <p className="text-slate-600 mb-5 text-sm">
@@ -102,10 +141,10 @@ export const SymptomAnalyzer: React.FC = () => {
             </div>
             <button
               onClick={openConfirmationModal}
-              disabled={isLoading}
+              disabled={isLoading || dailyUsage >= MAX_DAILY_LIMIT}
               className="w-full bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'กำลังวิเคราะห์...' : 'วิเคราะห์อาการ'}
+              {isLoading ? 'กำลังวิเคราะห์...' : dailyUsage >= MAX_DAILY_LIMIT ? 'ครบโควต้าวันนี้แล้ว' : 'วิเคราะห์อาการ'}
             </button>
           </div>
 
