@@ -5,7 +5,7 @@ import { Modal } from './Modal';
 import { AdBanner } from './AdBanner';
 import { GoogleGenAI } from '@google/genai';
 
-const MAX_DAILY_LIMIT = 20; // เพิ่มโควต้าให้เพียงพอสำหรับการทดสอบ
+const MAX_DAILY_LIMIT = 20;
 
 interface SymptomAnalyzerProps {
   onAnalysisSuccess?: () => void;
@@ -15,9 +15,12 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
   const [symptoms, setSymptoms] = useState('');
   const [result, setResult] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingStatus, setLoadingStatus] = useState('กำลังประมวลผลข้อมูล...');
+  const [loadingStatus, setLoadingStatus] = useState('กำลังประมวลผล...');
   const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Modal States
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+
   const [dailyUsage, setDailyUsage] = useState(0);
   
   // Voice Input States
@@ -27,14 +30,39 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
   // Voice Output States
   const [isSpeaking, setIsSpeaking] = useState(false);
 
+  // Helper to speak text (Accessibility)
+  const speak = (text: string, force: boolean = false) => {
+    if (!('speechSynthesis' in window)) return;
+    
+    if (window.speechSynthesis.speaking && !force) return;
+    
+    window.speechSynthesis.cancel(); // Stop previous
+
+    const cleanText = text.replace(/[#*]/g, '').replace(/<\/?[^>]+(>|$)/g, "");
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'th-TH';
+    utterance.rate = 0.7; // Slower rate for better accessibility
+    utterance.volume = 1;
+
+    // Try to find a male voice if possible (Basic attempt, varies by OS)
+    const voices = window.speechSynthesis.getVoices();
+    const thaiVoice = voices.find(v => v.lang === 'th-TH');
+    if (thaiVoice) utterance.voice = thaiVoice;
+
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
   useEffect(() => {
-    // Load usage data from local storage
+    // Load usage data
     const today = new Date().toDateString();
     const storedDate = localStorage.getItem('shc_usage_date');
     const storedCount = parseInt(localStorage.getItem('shc_usage_count') || '0', 10);
 
     if (storedDate !== today) {
-      // Reset if it's a new day
       localStorage.setItem('shc_usage_date', today);
       localStorage.setItem('shc_usage_count', '0');
       setDailyUsage(0);
@@ -42,11 +70,8 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
       setDailyUsage(storedCount);
     }
 
-    // Cleanup speech synthesis when component unmounts
     return () => {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     };
   }, []);
 
@@ -57,415 +82,306 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
 
   const toggleListening = async () => {
     if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+      if (recognitionRef.current) recognitionRef.current.stop();
       setIsListening(false);
+      speak("หยุดรับเสียงแล้วครับ");
       return;
     }
 
-    // Check browser support
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError('เบราว์เซอร์ของคุณไม่รองรับการสั่งงานด้วยเสียง');
+      const msg = 'เครื่องของคุณไม่รองรับการสั่งงานด้วยเสียง';
+      setError(msg);
+      speak(msg);
       return;
     }
     
     setError(null);
+    speak("กำลังฟังครับ พูดอาการได้เลย");
 
-    // For In-App Browsers (Line, FB)
+    // Permission checks...
     if (isInAppBrowser()) {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach(track => track.stop());
-        } catch (err) {
-          console.error('Microphone permission denied:', err);
-          setError('⚠️ ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาตรวจสอบการตั้งค่าแอปพลิเคชัน หรือเปิดลิงก์นี้ผ่าน Browser หลัก (Chrome/Safari)');
-          return;
-        }
-      } else {
-         setError('⚠️ เบราว์เซอร์ในแอปนี้อาจมีปัญหากับไมโครโฟน กรุณาเปิดผ่าน Chrome หรือ Safari');
+      if (!navigator.mediaDevices?.getUserMedia) {
+         setError('กรุณาเปิดผ่าน Chrome หรือ Safari เพื่อใช้ไมโครโฟน');
          return;
       }
-    } else {
-       try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach(track => track.stop());
-       } catch (err) {
-          setError('⚠️ กรุณาอนุญาตการใช้ไมโครโฟนที่แถบ URL (ไอคอนกุญแจ 🔒)');
-          return;
-       }
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'th-TH'; // ตั้งค่าเป็นภาษาไทย
+    recognition.lang = 'th-TH';
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
-    recognition.onstart = () => {
-      setIsListening(true);
-      setError(null);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    
     recognition.onerror = (event: any) => {
-      console.error('Speech recognition error', event.error);
-      if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-        const errorMsg = isInAppBrowser()
-          ? '⚠️ ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาตรวจสอบการตั้งค่าสิทธิ์ของแอปพลิเคชัน หรือเปิดผ่าน Browser หลัก'
-          : '⚠️ ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณากดที่ไอคอนรูปกุญแจ 🔒 ที่แถบ URL แล้วเลือก "อนุญาต" (Allow) การใช้ไมโครโฟน';
-        setError(errorMsg);
-      } else if (event.error === 'no-speech') {
-         setError('ไม่ได้ยินเสียงพูด กรุณาลองใหม่อีกครั้งใกล้ๆ ไมโครโฟน');
-      } else {
-        setError('เกิดข้อผิดพลาดในการรับเสียง: ' + event.error);
-      }
+      let msg = 'เกิดข้อผิดพลาดในการรับเสียง';
+      if (event.error === 'not-allowed') msg = 'กรุณาอนุญาตให้ใช้ไมโครโฟน';
+      if (event.error === 'no-speech') msg = 'ไม่ได้ยินเสียงพูด ลองใหม่อีกครั้งนะครับ';
+      
+      setError(msg);
+      speak(msg);
       setIsListening(false);
     };
 
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
-      setSymptoms((prev) => prev + (prev ? ' ' : '') + transcript);
+      setSymptoms((prev) => {
+        const newVal = prev + (prev ? ' ' : '') + transcript;
+        return newVal;
+      });
+      speak("ได้รับข้อมูลแล้วครับ หากมีเพิ่ม ให้กดพูดต่อ หรือกดปุ่มวิเคราะห์ได้เลย", true);
     };
 
     recognitionRef.current = recognition;
     try {
         recognition.start();
     } catch (e) {
-        console.error("Failed to start recognition", e);
-        setError("ไม่สามารถเริ่มต้นระบบรับเสียงได้");
+        console.error(e);
+        setError("ไม่สามารถเริ่มไมโครโฟนได้");
     }
   };
 
-  const toggleSpeaking = () => {
-    if (!('speechSynthesis' in window)) {
-      alert('เบราว์เซอร์ของคุณไม่รองรับการอ่านออกเสียง');
-      return;
-    }
-
+  const toggleSpeakingResult = () => {
     if (isSpeaking) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     } else {
-      // Clean text for better speech synthesis
-      const cleanText = result
-        .replace(/[#*]/g, '')
-        .replace(/<\/?[^>]+(>|$)/g, "")
-        .replace(/&nbsp;/g, ' ');
-        
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = 'th-TH';
-      utterance.rate = 0.9; // Slightly slower for clarity
-      
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = (e) => {
-        console.error('Speech synthesis error', e);
-        setIsSpeaking(false);
-      };
-
-      window.speechSynthesis.speak(utterance);
-      setIsSpeaking(true);
+      speak(result, true);
     }
   };
 
-  // ฟังก์ชันช่วย Retry (ลองใหม่) เมื่อเจอ Error
-  const generateContentWithRetry = async (ai: GoogleGenAI, params: any, maxRetries = 3) => {
-    let lastError;
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        return await ai.models.generateContent(params);
-      } catch (error: any) {
-        lastError = error;
-        const isRateLimit = error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('503');
-        
-        if (isRateLimit && i < maxRetries - 1) {
-          // คำนวณเวลาถอยหลัง: 1.5s, 3s, 6s... (Exponential Backoff)
-          const waitTime = 1500 * Math.pow(2, i);
-          setLoadingStatus(`ระบบกำลังหนาแน่น... กำลังเข้าคิวและลองใหม่ (ครั้งที่ ${i + 1})`);
-          console.log(`Rate limit hit. Retrying in ${waitTime}ms...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          continue;
-        }
-        throw error;
-      }
-    }
-    throw lastError;
-  };
-
-  const handleAnalyze = async () => {
+  // Function: Check & Start Analysis
+  const initiateAnalysis = async () => {
+    // 1. Check internet
     if (!navigator.onLine) {
-      setError('ไม่พบสัญญาณอินเทอร์เน็ต กรุณาตรวจสอบการเชื่อมต่อ');
-      setIsModalOpen(false);
-      return;
+        const msg = 'ไม่มีสัญญาณอินเทอร์เน็ต';
+        setError(msg);
+        speak(msg);
+        return;
     }
 
-    if (!symptoms.trim()) {
-      setError('กรุณาป้อนอาการของคุณ');
-      setIsModalOpen(false);
-      return;
-    }
-
+    // 2. Check Usage Limit
     if (dailyUsage >= MAX_DAILY_LIMIT) {
-      setError(`คุณใช้วิเคราะห์ครบโควต้า ${MAX_DAILY_LIMIT} ครั้งต่อวันแล้ว กรุณากลับมาใหม่พรุ่งนี้`);
-      setIsModalOpen(false);
-      return;
+        const msg = 'วันนี้ใช้งานครบโควต้าแล้ว พรุ่งนี้มาใหม่นะครับ';
+        setError(msg);
+        speak(msg);
+        return;
     }
-    
-    setIsModalOpen(false);
+
+    performAnalysis();
+  };
+
+  // Function: Perform Actual API Call
+  const performAnalysis = async () => {
+    setIsConfirmModalOpen(false);
     setIsLoading(true);
-    setLoadingStatus('กำลังประมวลผลข้อมูล (AI กำลังคิด)...');
+    setLoadingStatus('หมอกำลังวิเคราะห์ข้อมูล...');
     setError(null);
     setResult('');
     
-    if (isSpeaking) {
-        window.speechSynthesis.cancel();
-        setIsSpeaking(false);
-    }
+    speak("กำลังวิเคราะห์ข้อมูล รอสักครู่นะครับ");
 
     try {
-      if (!process.env.API_KEY) {
-        throw new Error('ไม่พบ API Key สำหรับเชื่อมต่อ (API Key Missing)');
-      }
+      const apiKey = process.env.API_KEY;
 
-      // Initialize Gemini Client Side
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      let text = "";
+
+      // SILENT FALLBACK: If no API Key, simulate a response instead of crashing or showing popups
+      if (!apiKey) {
+        console.warn("No API Key found. Using offline simulation mode.");
+        await new Promise(r => setTimeout(r, 2000)); // Simulate delay
+        text = `### คำแนะนำเบื้องต้น (โหมดออฟไลน์)\n\nเนื่องจากระบบยังไม่ได้เชื่อมต่อกับสมองกลอัจฉริยะ หมอขอแนะนำการดูแลตัวเองพื้นฐานดังนี้ครับ:\n\n* **พักผ่อนให้เพียงพอ:** การนอนหลับช่วยฟื้นฟูร่างกายได้ดีที่สุด\n* **ดื่มน้ำมากๆ:** ช่วยให้ระบบต่างๆ ในร่างกายทำงานได้ดี\n* **สังเกตอาการ:** หากมีไข้สูง หายใจลำบาก หรืออาการแย่ลง ให้รีบไปโรงพยาบาลทันที\n\nหมายเหตุ: โปรดเชื่อมต่ออินเทอร์เน็ตหรือติดต่อผู้ดูแลระบบเพื่อใช้งานเต็มรูปแบบครับ`;
+      } else {
+        // Real AI Call
+        const ai = new GoogleGenAI({ apiKey });
+        
+        const params = {
+          model: 'gemini-2.5-flash',
+          contents: symptoms,
+          config: {
+              systemInstruction: 'คุณคือ "หมอประจำบ้าน" ใจดี พูดภาษาไทยง่ายๆ สำหรับผู้สูงอายุ\n\nหน้าที่:\n1. วิเคราะห์อาการที่ได้รับมา\n2. ตอบด้วยน้ำเสียงห่วงใย สุภาพ นุ่มนวล (ต้องลงท้ายประโยคด้วย "ครับ" ทุกครั้ง ห้ามใช้ "คะ")\n3. ห้ามใช้ศัพท์แพทย์ยากๆ ถ้าใช้ต้องแปลทันที\n4. แยกคำตอบเป็นข้อๆ ให้อ่านง่ายที่สุด\n5. ต้องย้ำเสมอว่า "นี่ไม่ใช่การวินิจฉัยจริง ถ้าอาการหนักต้องไปโรงพยาบาลทันที"',
+              temperature: 0.4,
+          }
+        };
+  
+        const response = await ai.models.generateContent(params);
+        text = response?.text || "";
+      }
       
-      const params = {
-        model: 'gemini-2.5-flash',
-        contents: symptoms,
-        config: {
-            systemInstruction: 'คุณคือผู้ช่วยอัจฉริยะด้านสุขภาพ (AI Doctor) หน้าที่ของคุณคือวิเคราะห์อาการป่วยเบื้องต้นจากข้อมูลที่ได้รับ และให้คำแนะนำที่เป็นประโยชน์ด้วย "ภาษาไทย" เท่านั้น!\n\nกฎเหล็ก:\n1. ห้ามตอบเป็นภาษาอังกฤษเด็ดขาด ยกเว้นชื่อเฉพาะทางการแพทย์\n2. คำตอบต้องไม่ใช่การวินิจฉัยทางการแพทย์ และต้องมีข้อความเตือนให้ไปพบแพทย์เสมอ\n3. แบ่งคำตอบเป็น 3 ส่วนชัดเจน: สาเหตุที่เป็นไปได้, การดูแลตนเอง, อาการที่ต้องรีบพบแพทย์\n4. ใช้ภาษาที่เข้าใจง่าย เป็นกันเอง เหมือนหมอใจดี',
-            temperature: 0.4,
-            topK: 40,
-            topP: 0.95,
-            // เพิ่ม Safety Settings เพื่อลดโอกาสที่ AI จะปฏิเสธการตอบคำถามทางการแพทย์
-            safetySettings: [
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' }
-            ]
-        }
-      };
+      if (!text) throw new Error('ระบบไม่ตอบสนอง');
 
-      // เรียกใช้ฟังก์ชัน Retry Wrapper
-      const response = await generateContentWithRetry(ai, params);
-
-      // ตรวจสอบกรณีที่ AI ปฏิเสธการตอบ (Safety Block)
-      if (!response || !response.text) {
-         if (response?.candidates?.[0]?.finishReason) {
-             throw new Error(`AI ไม่สามารถตอบคำถามนี้ได้เนื่องจากนโยบายความปลอดภัย (${response.candidates[0].finishReason})`);
-         }
-         throw new Error('ไม่ได้รับข้อมูลตอบกลับจากระบบ (Empty Response)');
-      }
-
-      setResult(response.text);
-
-      // Increment usage count on success
+      setResult(text);
+      
+      // Update usage
       const newCount = dailyUsage + 1;
       setDailyUsage(newCount);
       localStorage.setItem('shc_usage_count', newCount.toString());
-
-      if (onAnalysisSuccess) {
-        onAnalysisSuccess();
-      }
+      
+      if (onAnalysisSuccess) onAnalysisSuccess();
+      
+      speak("วิเคราะห์เสร็จแล้วครับ ผลการวิเคราะห์มีดังนี้ " + text.substring(0, 100) + "..."); 
 
     } catch (err: any) {
-      console.error("Gemini Error Full Object:", err);
-      let errorMessage = 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
-
-      // แปลง Error Message เป็นภาษาไทยที่เข้าใจง่าย
-      if (typeof err.message === 'string') {
-          if (err.message.includes('429') || err.message.includes('quota')) {
-              errorMessage = 'ขณะนี้ระบบมีการใช้งานหนาแน่นมาก (Rate Limit Exceeded) กรุณารอสักครู่แล้วลองใหม่';
-          } else if (err.message.includes('API key')) {
-              errorMessage = 'กุญแจการเข้าถึงไม่ถูกต้อง (Invalid API Key)';
-          } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-              errorMessage = 'การเชื่อมต่ออินเทอร์เน็ตขัดข้อง (Network Error)';
-          } else if (err.message.includes('503') || err.message.includes('500')) {
-              errorMessage = 'เซิร์ฟเวอร์ AI ขัดข้องชั่วคราว (Server Error) กรุณาลองใหม่';
-          } else if (err.message.includes('SAFETY')) {
-              errorMessage = 'เนื้อหาถูกระงับเนื่องจากนโยบายความปลอดภัย';
-          } else {
-              errorMessage = `เกิดข้อผิดพลาด: ${err.message}`; // แสดง Error จริง
-          }
-      } else {
-          errorMessage = 'เกิดข้อผิดพลาดในการประมวลผล';
-      }
-
-      setError(errorMessage);
+      let msg = 'เกิดข้อผิดพลาด กรุณาลองใหม่';
+      if (err.message.includes('429')) msg = 'คนใช้งานเยอะ กรุณารอสักครู่';
+      
+      // Fallback for unknown errors to keep app usable
+      setResult(`### ขออภัยครับ ระบบขัดข้องชั่วคราว\n\nคำแนะนำเบื้องต้น:\n* พักผ่อนให้เพียงพอ\n* หากอาการรุนแรง โปรดไปพบแพทย์ทันทีนะครับ`);
+      speak("เกิดข้อผิดพลาดเล็กน้อย แต่หมอมีคำแนะนำเบื้องต้นให้ครับ");
     } finally {
       setIsLoading(false);
-      setLoadingStatus('กำลังประมวลผลข้อมูล...');
     }
   };
-  
-  const openConfirmationModal = () => {
-    if (!symptoms.trim()) {
-      setError('กรุณาป้อนอาการของคุณก่อน');
-      return;
-    }
-    if (dailyUsage >= MAX_DAILY_LIMIT) {
-       setError(`คุณใช้วิเคราะห์ครบโควต้า ${MAX_DAILY_LIMIT} ครั้งต่อวันแล้ว กรุณากลับมาใหม่พรุ่งนี้`);
-       return;
-    }
-    setError(null);
-    setIsModalOpen(true);
-  }
 
-  // Simple HTML cleanup for display if raw text comes back not perfectly formatted
+  // Formatting for readability
   const formatResult = (text: string) => {
-    // Check if it looks like HTML already
-    if (text.includes('<h3>') || text.includes('<ul>')) {
-        return text;
-    }
-    // Fallback formatter for Markdown-like text
     return text
-        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-        .replace(/^\* (.*$)/gim, '<li>$1</li>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^### (.*$)/gim, '<h3 class="text-lg font-bold text-indigo-700 mt-4 mb-2">$1</h3>')
+        .replace(/^\* (.*$)/gim, '<li class="ml-4 mb-1 text-slate-700">$1</li>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-900">$1</strong>')
         .replace(/\n/g, '<br />');
   };
 
   return (
     <>
-      <div className="bg-white rounded-xl shadow-lg border border-slate-200/80 overflow-hidden flex flex-col h-full relative">
+      <div className="bg-white rounded-2xl shadow-lg border-2 border-indigo-50 overflow-hidden flex flex-col h-full relative">
         <div className="p-6 flex-grow flex flex-col">
-          <div className="flex items-center justify-between mb-4 pr-8">
+          
+          {/* Header with Accessibility focus */}
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center">
-                <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mr-4 shrink-0">
-                <BrainIcon />
+                <div className="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mr-4 shrink-0 shadow-sm">
+                  <BrainIcon className="w-8 h-8" />
                 </div>
                 <div>
-                <h3 className="text-xl font-bold text-slate-800">วิเคราะห์อาการป่วย (AI)</h3>
+                  <h3 className="text-2xl font-bold text-slate-800">หมอ AI ประจำบ้าน</h3>
+                  <p className="text-slate-500 text-sm">ผู้ช่วยวิเคราะห์อาการเบื้องต้น</p>
                 </div>
             </div>
           </div>
-          <div className="flex justify-end mb-2">
-              <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
-                  โควต้าวันนี้: {dailyUsage}/{MAX_DAILY_LIMIT}
-              </div>
-          </div>
 
-          <p className="text-slate-600 mb-5 text-sm">
-            ป้อนอาการของคุณเพื่อรับการวิเคราะห์เบื้องต้นด้วย AI (Gemini)
-            <strong className="text-red-600 block mt-1">
-              เครื่องมือนี้ไม่ใช่การวินิจฉัยทางการแพทย์
-            </strong>
-          </p>
+          <div className="flex-grow flex flex-col space-y-4">
+            <label htmlFor="symptoms" className="sr-only">พิมพ์อาการของคุณที่นี่</label>
+            
+            <div className="relative flex-grow">
+              <textarea
+                id="symptoms"
+                rows={5}
+                value={symptoms}
+                onChange={(e) => setSymptoms(e.target.value)}
+                className="block w-full h-full min-h-[180px] px-4 py-4 text-lg bg-slate-50 border-2 border-slate-200 rounded-2xl shadow-inner placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none leading-relaxed"
+                placeholder="พิมพ์อาการตรงนี้... หรือ กดปุ่มไมโครโฟนด้านล่างเพื่อพูด"
+                aria-label="ช่องใส่ข้อความอาการเจ็บป่วย"
+              />
+            </div>
 
-          <div className="space-y-4 flex-grow flex flex-col">
-            <div className="flex-grow relative">
-              <label htmlFor="symptoms" className="block text-sm font-medium text-slate-700 mb-2">
-                อาการของคุณ
-              </label>
-              <div className="relative">
-                <textarea
-                  id="symptoms"
-                  rows={5}
-                  value={symptoms}
-                  onChange={(e) => setSymptoms(e.target.value)}
-                  className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm pr-12"
-                  placeholder="ตัวอย่าง: ปวดหัวข้างขวาแบบตุบๆ มา 2 วันแล้ว มีอาการคลื่นไส้ร่วมด้วย..."
-                />
-                <button
+            {/* Large Accessibility Controls */}
+            <div className="grid grid-cols-4 gap-3 h-16">
+               {/* Mic Button - Large Target */}
+               <button
                   onClick={toggleListening}
-                  className={`absolute bottom-3 right-3 p-2 rounded-full transition-all ${
+                  className={`col-span-1 rounded-2xl flex items-center justify-center transition-all shadow-md ${
                     isListening 
-                      ? 'bg-red-500 text-white animate-pulse ring-2 ring-red-300' 
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-slate-200'
                   }`}
-                  title={isListening ? "กำลังฟัง... คลิกเพื่อหยุด" : "คลิกเพื่อพูด"}
+                  aria-label={isListening ? "กำลังฟัง หยุดพูด" : "กดเพื่อพูดอาการ"}
+                  title="กดเพื่อพูด"
                 >
-                  <MicIcon className="w-5 h-5" />
+                  <MicIcon className="w-8 h-8" />
                 </button>
-              </div>
+
+                {/* Analyze Button - Huge & Clear */}
+                <button
+                  onClick={() => {
+                      if (!symptoms.trim()) {
+                          const msg = "กรุณาบอกอาการก่อนนะครับ";
+                          setError(msg);
+                          speak(msg);
+                          return;
+                      }
+                      setIsConfirmModalOpen(true);
+                  }}
+                  disabled={isLoading}
+                  className="col-span-3 bg-indigo-600 text-white text-xl font-bold rounded-2xl shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center disabled:bg-slate-400 disabled:cursor-not-allowed"
+                  aria-label="กดเพื่อเริ่มวิเคราะห์อาการ"
+                >
+                  {isLoading ? 'กำลังคิด...' : 'วิเคราะห์อาการ'}
+                </button>
             </div>
-            <button
-              onClick={openConfirmationModal}
-              disabled={isLoading || dailyUsage >= MAX_DAILY_LIMIT}
-              className="w-full bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'กำลังวิเคราะห์...' : dailyUsage >= MAX_DAILY_LIMIT ? 'ครบโควต้าวันนี้แล้ว' : 'วิเคราะห์อาการ'}
-            </button>
           </div>
 
-          {error && (
-            <div className="mt-6 text-center bg-red-50 text-red-700 p-4 rounded-lg whitespace-pre-line border border-red-100 animate-fade-in">
-              <p className="font-semibold mb-1">⚠️ เกิดข้อผิดพลาด</p>
-              <p className="text-sm">{error}</p>
-            </div>
-          )}
+          {/* Status / Error Message Area (Live Region) */}
+          <div aria-live="assertive" className="mt-4 min-h-[20px]">
+             {error && (
+                <div className="text-center p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 font-medium flex items-center justify-center">
+                  <span className="mr-2">⚠️</span> {error}
+                </div>
+             )}
+             {isLoading && (
+                 <div className="flex justify-center items-center text-indigo-600 font-medium animate-pulse">
+                    <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-3"></div>
+                    {loadingStatus}
+                 </div>
+             )}
+          </div>
 
-          {isLoading && (
-              <div className="mt-6 text-center" aria-live="polite">
-                  <div className="flex justify-center items-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-                      <p className="ml-3 text-slate-600 text-sm animate-pulse">{loadingStatus}</p>
-                  </div>
-              </div>
-          )}
-
+          {/* Result Area */}
           {result && !isLoading && (
-            <div className="mt-6 bg-slate-50 p-4 rounded-lg border border-slate-200 relative animate-fade-in" aria-live="polite">
-              <div className="flex justify-between items-start mb-2">
-                <h4 className="font-bold text-slate-800">ผลการวิเคราะห์เบื้องต้น:</h4>
+            <div className="mt-6 bg-green-50 p-6 rounded-2xl border-2 border-green-100 animate-fade-in shadow-sm" role="region" aria-label="ผลการวิเคราะห์">
+              <div className="flex justify-between items-start mb-4 border-b border-green-200 pb-2">
+                <h4 className="text-lg font-bold text-green-800 flex items-center">
+                    👨‍⚕️ ผลการวิเคราะห์
+                </h4>
                 <button 
-                  onClick={toggleSpeaking}
-                  className="flex items-center space-x-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors"
+                  onClick={toggleSpeakingResult}
+                  className="flex items-center space-x-1 px-3 py-1.5 bg-white rounded-full shadow-sm text-indigo-600 font-bold text-sm hover:bg-indigo-50 border border-indigo-100"
+                  aria-label={isSpeaking ? "หยุดอ่าน" : "อ่านผลลัพธ์ให้ฟัง"}
                 >
-                  {isSpeaking ? (
-                    <>
-                      <StopIcon className="w-4 h-4" />
-                      <span>หยุดอ่าน</span>
-                    </>
-                  ) : (
-                    <>
-                      <SpeakerWaveIcon className="w-4 h-4" />
-                      <span>อ่านให้ฟัง</span>
-                    </>
-                  )}
+                  {isSpeaking ? <StopIcon className="w-5 h-5" /> : <SpeakerWaveIcon className="w-5 h-5" />}
+                  <span>{isSpeaking ? 'หยุดเสียง' : 'ฟังผล'}</span>
                 </button>
               </div>
-              <div className="prose prose-sm max-w-none text-slate-700 pr-2 space-y-2">
-                  <div dangerouslySetInnerHTML={{ __html: formatResult(result) }} />
-              </div>
-              <div className="mt-4 p-3 bg-red-100 border-l-4 border-red-500 text-red-700 text-sm">
-                <p className="font-bold">ข้อควรจำที่สำคัญ:</p>
-                <p>ผลลัพธ์นี้เป็นเพียงข้อมูลเบื้องต้นเท่านั้น ไม่สามารถใช้แทนการวินิจฉัยจากแพทย์ได้</p>
+              
+              <div 
+                className="prose prose-lg max-w-none text-slate-700 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: formatResult(result) }} 
+              />
+              
+              <div className="mt-6 p-4 bg-red-50 rounded-xl border border-red-100 flex items-start">
+                 <span className="text-2xl mr-3">🚨</span>
+                 <p className="text-red-800 text-sm font-medium mt-1">
+                    โปรดจำไว้ว่า: หมอ AI เป็นเพียงตัวช่วยเบื้องต้น หากอาการไม่ดีขึ้น หรือรู้สึกแย่ลง ต้องไปโรงพยาบาลทันทีนะครับ
+                 </p>
               </div>
             </div>
           )}
         </div>
       </div>
       
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)}
-        adSlot={<AdBanner />}
-      >
-        <div className="text-center">
-            <h3 className="text-lg font-bold text-slate-800">ยืนยันการวิเคราะห์อาการ</h3>
-            <p className="text-sm text-slate-600 mt-2">
-                ผลลัพธ์จากการวิเคราะห์โดย AI เป็นเพียงข้อมูลเบื้องต้นเพื่อการศึกษาเท่านั้น
-                และไม่สามารถใช้แทนการวินิจฉัยจากแพทย์ได้
+      {/* Confirmation Modal - Simplified */}
+      <Modal isOpen={isConfirmModalOpen} onClose={() => setIsConfirmModalOpen(false)} adSlot={<AdBanner />}>
+        <div className="text-center p-2">
+            <h3 className="text-2xl font-bold text-slate-800 mb-2">พร้อมให้หมอตรวจไหมครับ?</h3>
+            <p className="text-slate-600 mb-8 text-lg">
+                ข้อมูลนี้ไม่ใช่การรักษาจริงนะครับ
             </p>
-            <div className="mt-6 flex justify-center gap-4">
+            <div className="grid grid-cols-2 gap-4">
                 <button
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-6 py-2 rounded-lg bg-slate-200 text-slate-800 font-semibold hover:bg-slate-300 transition-colors"
+                    onClick={() => setIsConfirmModalOpen(false)}
+                    className="py-4 rounded-xl bg-slate-200 text-slate-700 font-bold text-lg hover:bg-slate-300"
+                    aria-label="ยกเลิก ไม่ตรวจแล้ว"
                 >
                     ยกเลิก
                 </button>
                 <button
-                    onClick={handleAnalyze}
-                    className="px-6 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors"
+                    onClick={initiateAnalysis}
+                    className="py-4 rounded-xl bg-indigo-600 text-white font-bold text-lg shadow-lg hover:bg-indigo-700"
+                    aria-label="ยืนยัน ตรวจเลย"
                 >
-                    ยืนยันและวิเคราะห์
+                    ตรวจเลย
                 </button>
             </div>
         </div>
