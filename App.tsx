@@ -4,7 +4,7 @@ import { BMICalculator } from './components/BMICalculator';
 import { SymptomAnalyzer } from './components/SymptomAnalyzer';
 import { NearbyHospitals } from './components/NearbyHospitals';
 import { HEALTH_CHECKS } from './constants';
-import { StethoscopeIcon, DownloadIcon, ShareIcon } from './components/icons';
+import { StethoscopeIcon, DownloadIcon, ShareIcon, ShareIcon as ShareIconSmall } from './components/icons';
 import { ShareModal } from './components/ShareModal';
 import { Modal } from './components/Modal';
 
@@ -12,19 +12,34 @@ const App: React.FC = () => {
   const [openAccordion, setOpenAccordion] = React.useState<string | null>('pulse-check');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
+    // Check if running in standalone mode (installed)
+    const checkStandalone = () => {
+      const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      setIsStandalone(isStandaloneMode);
+    };
+    
+    checkStandalone();
+    window.matchMedia('(display-mode: standalone)').addEventListener('change', checkStandalone);
+
+    // Check if iOS
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIOS(ios);
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setIsInstallModalOpen(true);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.matchMedia('(display-mode: standalone)').removeEventListener('change', checkStandalone);
     };
   }, []);
 
@@ -34,7 +49,9 @@ const App: React.FC = () => {
       const { outcome } = await deferredPrompt.userChoice;
       console.log(`User response to the install prompt: ${outcome}`);
       setDeferredPrompt(null);
-      setIsInstallModalOpen(false);
+    } else {
+      // If native prompt is not available (e.g. iOS or event not fired yet), show manual instructions
+      setIsInstallInstructionOpen(true);
     }
   };
 
@@ -94,14 +111,14 @@ const App: React.FC = () => {
                   <ShareIcon className="w-5 h-5" />
                   <span className="hidden sm:inline">แชร์</span>
                 </button>
-                {deferredPrompt && (
+                {!isStandalone && (
                   <button
                     onClick={handleInstallClick}
                     className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
                     aria-label="Install app"
                   >
                     <DownloadIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline">ติดตั้งแอป</span>
+                    <span className="hidden sm:inline">สร้างทางลัด</span>
                   </button>
                 )}
               </div>
@@ -191,33 +208,33 @@ const App: React.FC = () => {
       </div>
       <ShareModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
       
-      <Modal isOpen={isInstallModalOpen} onClose={() => setIsInstallModalOpen(false)}>
-        <div className="text-center">
-          <h3 className="text-xl font-bold text-slate-800">ติดตั้งแอปพลิเคชัน</h3>
-          <div className="mt-4 mb-4 flex justify-center">
-             <div className="p-4 bg-indigo-50 rounded-full ring-4 ring-indigo-50">
-                <DownloadIcon className="w-8 h-8 text-indigo-600" />
-             </div>
-          </div>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            เพิ่ม <strong>"Self Health Check"</strong> ไว้ที่หน้าจอหลัก<br/>
-            เพื่อการเข้าถึงที่สะดวกรวดเร็วและใช้งานได้ดียิ่งขึ้น
-          </p>
-          <div className="mt-6 flex justify-center gap-3">
-            <button
-              onClick={() => setIsInstallModalOpen(false)}
-              className="px-5 py-2.5 rounded-lg bg-slate-100 text-slate-600 font-semibold hover:bg-slate-200 transition-colors text-sm"
-            >
-              ไว้ทีหลัง
-            </button>
-            <button
-              onClick={handleInstallClick}
-              className="px-5 py-2.5 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-all text-sm shadow-lg shadow-indigo-200 hover:shadow-xl hover:shadow-indigo-300 transform hover:-translate-y-0.5"
-            >
-              ติดตั้งเลย
-            </button>
-          </div>
-        </div>
+      {/* Install Instruction Modal */}
+      <Modal isOpen={isInstallInstructionOpen} onClose={() => setIsInstallInstructionOpen(false)}>
+         <div className="text-center p-2">
+             <h3 className="text-xl font-bold text-slate-800 mb-4">
+                 {isIOS ? 'วิธีติดตั้งบน iOS' : 'วิธีติดตั้งแอป'}
+             </h3>
+             
+             {isIOS ? (
+                 <div className="space-y-4 text-left text-slate-600 text-sm">
+                     <p>1. แตะที่ปุ่ม <strong>แชร์</strong> <span className="inline-block"><ShareIconSmall className="w-4 h-4 inline text-blue-500"/></span> ที่แถบด้านล่างของ Safari</p>
+                     <p>2. เลื่อนลงมาและเลือก <strong>"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen)</strong></p>
+                     <p>3. กดปุ่ม <strong>"เพิ่ม" (Add)</strong> ที่มุมขวาบน</p>
+                 </div>
+             ) : (
+                 <div className="space-y-4 text-center text-slate-600 text-sm">
+                     <p>กรุณากดที่เมนูของเบราว์เซอร์ (สัญลักษณ์จุดสามจุด หรือ ขีดสามขีด)</p>
+                     <p>แล้วเลือกเมนู <strong>"ติดตั้งแอป"</strong> หรือ <strong>"เพิ่มลงในหน้าจอหลัก"</strong></p>
+                 </div>
+             )}
+             
+             <button
+                onClick={() => setIsInstallInstructionOpen(false)}
+                className="mt-6 w-full bg-slate-200 text-slate-800 font-bold py-2 rounded-lg hover:bg-slate-300 transition-colors"
+             >
+                 เข้าใจแล้ว
+             </button>
+         </div>
       </Modal>
     </>
   );
