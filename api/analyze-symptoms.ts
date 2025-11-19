@@ -1,3 +1,4 @@
+
 export const config = {
   runtime: 'edge',
 };
@@ -10,13 +11,13 @@ export default async (req: Request) => {
     });
   }
 
-  // ดึง API Key จาก Vercel Environment Variables (ปลอดภัยและฟรี)
+  // ดึง API Key จาก Environment Variable อย่างเดียว (ปลอดภัยและมาตรฐาน)
   const apiKey = process.env.GROQ_API_KEY;
 
-  if (!apiKey) {
-    console.error("Error: GROQ_API_KEY is missing in Environment Variables.");
+  if (!apiKey || !apiKey.startsWith('gsk_')) {
+    console.error("Error: GROQ_API_KEY is missing or invalid.");
     return new Response(JSON.stringify({ 
-      error: 'Server Configuration Error: API Key is missing. Please set GROQ_API_KEY in Vercel Settings.' 
+      error: 'Configuration Error: GROQ_API_KEY is missing in Vercel Environment Variables.' 
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
