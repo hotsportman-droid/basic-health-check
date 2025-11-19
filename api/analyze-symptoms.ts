@@ -51,7 +51,7 @@ export default async (req: Request) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama3-70b-8192',
+        model: 'llama-3.3-70b-versatile', // อัปเดตเป็นโมเดลรุ่นใหม่ล่าสุดที่รองรับ
         messages: [
           {
             role: 'system',
