@@ -14,10 +14,6 @@ interface SymptomAnalyzerProps {
 
 // --- SAFE KEY RETRIEVAL ---
 // ฟังก์ชันดึง Key อย่างปลอดภัย ป้องกัน App Crash บน Browser
-// ลำดับความสำคัญ: 
-// 1. ค่าที่ฝังในโค้ด (GLOBAL_API_KEY) -> เพื่อให้ทุกคนใช้ได้เลย
-// 2. ค่าใน LocalStorage (ถ้ามีคนอยาก override)
-// 3. Environment Variables (Vercel/Vite)
 export const getSafeApiKey = (): string | null => {
   try {
     // 1. GLOBAL KEY (Priority สำหรับ Public App)
@@ -48,7 +44,6 @@ export const getSafeApiKey = (): string | null => {
 
 // --- SMART OFFLINE DOCTOR ---
 // สมองกลสำรอง: ทำงานทันทีเมื่อ AI เชื่อมต่อไม่ได้
-// ให้คำแนะนำสุขภาพตามอาการจริง โดยไม่ต้องพึ่งอินเทอร์เน็ต
 const analyzeSymptomsOffline = (input: string): string => {
   const text = input.toLowerCase();
   let diagnosisPart = "จากการประเมินอาการที่คุณเล่ามาเบื้องต้นครับ ";
@@ -105,35 +100,91 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
 
   // Voice Output States
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const shouldSpeakRef = useRef(false); // Ref to control speech queue
 
-  // Result Source State: 'AI' or 'OFFLINE'
-  const [resultSource, setResultSource] = useState<'AI' | 'OFFLINE'>('OFFLINE');
-  const [debugInfo, setDebugInfo] = useState<string | null>(null);
+  const stopSpeaking = () => {
+    shouldSpeakRef.current = false;
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  };
 
-  // Helper to speak text (Accessibility)
-  const speak = (text: string, force: boolean = false) => {
+  // Helper to speak text (Accessibility) with Smart Chunking
+  const speak = (text: string) => {
     if (!('speechSynthesis' in window)) return;
     
-    if (window.speechSynthesis.speaking && !force) return;
+    // Stop previous speech
+    stopSpeaking();
     
-    window.speechSynthesis.cancel(); // Stop previous
-
-    const cleanText = text.replace(/[#*]/g, '').replace(/<\/?[^>]+(>|$)/g, "");
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'th-TH';
-    utterance.rate = 0.7; // Slower rate for better accessibility
-    utterance.volume = 1;
-
-    // Try to find a male voice if possible (Basic attempt, varies by OS)
-    const voices = window.speechSynthesis.getVoices();
-    const thaiVoice = voices.find(v => v.lang === 'th-TH');
-    if (thaiVoice) utterance.voice = thaiVoice;
-
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
+    // Activate flag
+    shouldSpeakRef.current = true;
     setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
+
+    // 1. Clean text
+    const cleanText = text.replace(/[#*]/g, '').replace(/<\/?[^>]+(>|$)/g, "");
+
+    // 2. Smart Chunking Strategy
+    // Split by newlines first (paragraphs)
+    const rawChunks = cleanText.split(/[\n\r]+/);
+    const chunks: string[] = [];
+
+    rawChunks.forEach(chunk => {
+        chunk = chunk.trim();
+        if (!chunk) return;
+
+        // If chunk is too long (>150 chars), split by space
+        if (chunk.length > 150) {
+            const subChunks = chunk.match(/.{1,150}(?:\s|$)/g);
+            if (subChunks) {
+                subChunks.forEach(s => chunks.push(s));
+            } else {
+                chunks.push(chunk);
+            }
+        } else {
+            chunks.push(chunk);
+        }
+    });
+
+    if (chunks.length === 0) {
+        setIsSpeaking(false);
+        return;
+    }
+
+    let currentIndex = 0;
+
+    // Recursive player
+    const playNext = () => {
+        if (!shouldSpeakRef.current || currentIndex >= chunks.length) {
+            setIsSpeaking(false);
+            shouldSpeakRef.current = false;
+            return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(chunks[currentIndex]);
+        utterance.lang = 'th-TH';
+        utterance.rate = 0.75; // Slow rate
+        utterance.volume = 1;
+
+        const voices = window.speechSynthesis.getVoices();
+        const thaiVoice = voices.find(v => v.lang === 'th-TH');
+        if (thaiVoice) utterance.voice = thaiVoice;
+
+        utterance.onend = () => {
+            currentIndex++;
+            playNext();
+        };
+
+        utterance.onerror = (e) => {
+            console.error("TTS Error", e);
+            setIsSpeaking(false);
+            shouldSpeakRef.current = false;
+        };
+
+        window.speechSynthesis.speak(utterance);
+    };
+
+    playNext();
   };
 
   useEffect(() => {
@@ -151,7 +202,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     }
 
     return () => {
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      stopSpeaking();
     };
   }, []);
 
@@ -211,7 +262,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
         const newVal = prev + (prev ? ' ' : '') + transcript;
         return newVal;
       });
-      speak("ได้รับข้อมูลแล้วครับ หากมีเพิ่ม ให้กดพูดต่อ หรือกดปุ่มวิเคราะห์ได้เลย", true);
+      speak("ได้รับข้อมูลแล้วครับ หากมีเพิ่ม ให้กดพูดต่อ หรือกดปุ่มวิเคราะห์ได้เลย");
     };
 
     recognitionRef.current = recognition;
@@ -225,23 +276,20 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
 
   const toggleSpeakingResult = () => {
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+      stopSpeaking();
     } else {
-      speak(result, true);
+      speak(result);
     }
   };
 
   // Function: Check & Start Analysis
   const initiateAnalysis = async () => {
-    // Check Usage Limit
     if (dailyUsage >= MAX_DAILY_LIMIT) {
         const msg = 'วันนี้ใช้งานครบโควต้าแล้ว พรุ่งนี้มาใหม่นะครับ';
         setError(msg);
         speak(msg);
         return;
     }
-
     performAnalysis();
   };
 
@@ -252,15 +300,13 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     setLoadingStatus('หมอกำลังวิเคราะห์ข้อมูล...');
     setError(null);
     setResult('');
-    setDebugInfo(null);
     
     speak("กำลังวิเคราะห์ข้อมูล รอสักครู่นะครับ");
 
     try {
-      // 1. ดึง Key แบบปลอดภัย (ไม่ Crash แน่นอน)
+      // 1. ดึง Key แบบปลอดภัย
       const apiKey = getSafeApiKey();
       let text = "";
-      let currentDebugInfo = null;
 
       // 2. ถ้ามี Key และมีเน็ต ลองเรียก AI
       if (apiKey && navigator.onLine) {
@@ -275,7 +321,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
               }
             };
             
-            // Timeout 25 วินาที (เพิ่มขึ้นเพื่อให้โอกาส AI คิดนานขึ้น โดยเฉพาะเน็ตช้า)
+            // Timeout 25 วินาที
             const aiPromise = ai.models.generateContent(params);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 25000));
             
@@ -283,29 +329,19 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
             
             if (response && response.text) {
                 text = response.text;
-                setResultSource('AI');
             }
         } catch (apiErr: any) {
             console.warn("AI Connection issue, switching to backup engine.", apiErr);
-            const reason = apiErr.message === "Timeout" ? "Connection Timed Out (Internet slow)" : (apiErr.message || 'Unknown Error');
-            currentDebugInfo = `AI Error: ${reason}`;
         }
-      } else {
-          if (!apiKey) currentDebugInfo = "API Key Missing";
-          if (!navigator.onLine) currentDebugInfo = "Device Offline";
       }
       
-      // 3. ถ้าไม่มี Text (เพราะไม่มี Key, AI Error, หรือเน็ตหลุด) -> ใช้ Offline Engine ทันที
+      // 3. ถ้าไม่มี Text -> ใช้ Offline Engine ทันที
       if (!text) {
-         // หน่วงเวลาเล็กน้อยให้เหมือนคิดจริง (User Experience)
          await new Promise(r => setTimeout(r, 1500));
          text = analyzeSymptomsOffline(symptoms);
-         setResultSource('OFFLINE');
-         if (!currentDebugInfo) currentDebugInfo = "Fallback triggered (Internal Logic)";
       }
 
       setResult(text);
-      setDebugInfo(currentDebugInfo);
       
       // Update usage
       const newCount = dailyUsage + 1;
@@ -314,14 +350,13 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
       
       if (onAnalysisSuccess) onAnalysisSuccess();
       
-      speak("วิเคราะห์เสร็จแล้วครับ ผลการวิเคราะห์มีดังนี้ " + text.substring(0, 100) + "..."); 
+      // Speak Full Result
+      const intro = "วิเคราะห์เสร็จแล้วครับ ผลการวิเคราะห์มีดังนี้ ";
+      speak(intro + text); 
 
     } catch (err: any) {
-      // Final Safety Net: ถ้าพังทุกขั้นตอนจริงๆ ให้ตอบแบบพื้นฐานสุดๆ
       const safeText = analyzeSymptomsOffline(symptoms);
       setResult(safeText);
-      setResultSource('OFFLINE');
-      setDebugInfo(`Critical System Crash: ${err.message}`);
       speak("วิเคราะห์เสร็จแล้วครับ");
     } finally {
       setIsLoading(false);
@@ -342,7 +377,6 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
       <div className="bg-white rounded-2xl shadow-lg border-2 border-indigo-50 overflow-hidden flex flex-col h-full relative">
         <div className="p-6 flex-grow flex flex-col">
           
-          {/* Header with Accessibility focus */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center">
                 <div className="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mr-4 shrink-0 shadow-sm">
@@ -370,9 +404,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
               />
             </div>
 
-            {/* Large Accessibility Controls */}
             <div className="grid grid-cols-4 gap-3 h-16">
-               {/* Mic Button - Large Target */}
                <button
                   onClick={toggleListening}
                   className={`col-span-1 rounded-2xl flex items-center justify-center transition-all shadow-md ${
@@ -386,7 +418,6 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
                   <MicIcon className="w-8 h-8" />
                 </button>
 
-                {/* Analyze Button - Huge & Clear */}
                 <button
                   onClick={() => {
                       if (!symptoms.trim()) {
@@ -406,7 +437,6 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
             </div>
           </div>
 
-          {/* Status / Error Message Area (Live Region) */}
           <div aria-live="assertive" className="mt-4 min-h-[20px]">
              {error && (
                 <div className="text-center p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 font-medium flex items-center justify-center">
@@ -421,14 +451,11 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
              )}
           </div>
 
-          {/* Result Area */}
           {result && !isLoading && (
             <div className="mt-6 bg-green-50 p-6 rounded-2xl border-2 border-green-100 animate-fade-in shadow-sm" role="region" aria-label="ผลการวิเคราะห์">
               <div className="flex justify-between items-start mb-4 border-b border-green-200 pb-2">
                 <h4 className="text-lg font-bold text-green-800 flex items-center">
-                    {resultSource === 'AI' 
-                        ? "👨‍⚕️ ผลการวิเคราะห์ (จากระบบ AI อัจฉริยะ ✨)" 
-                        : "👨‍⚕️ ผลการวิเคราะห์ (จากระบบพื้นฐาน 📝)"}
+                    👨‍⚕️ ผลการวิเคราะห์เบื้องต้น
                 </h4>
                 <button 
                   onClick={toggleSpeakingResult}
@@ -451,21 +478,11 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
                     โปรดจำไว้ว่า: หมอ AI เป็นเพียงตัวช่วยเบื้องต้น หากอาการไม่ดีขึ้น หรือรู้สึกแย่ลง ต้องไปโรงพยาบาลทันทีนะครับ
                  </p>
               </div>
-
-              {/* Debug Info Section - Only shows in offline/fallback mode */}
-              {resultSource === 'OFFLINE' && debugInfo && (
-                <div className="mt-4 pt-2 border-t border-slate-200/50">
-                    <p className="text-[11px] text-slate-400 font-mono">
-                        Debug Reason: {debugInfo}
-                    </p>
-                </div>
-              )}
             </div>
           )}
         </div>
       </div>
       
-      {/* Confirmation Modal - Simplified */}
       <Modal isOpen={isConfirmModalOpen} onClose={() => setIsConfirmModalOpen(false)} adSlot={<AdBanner />}>
         <div className="text-center p-2">
             <h3 className="text-2xl font-bold text-slate-800 mb-2">พร้อมให้หมอตรวจไหมครับ?</h3>

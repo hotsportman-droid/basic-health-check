@@ -5,10 +5,9 @@ import { BMICalculator } from './components/BMICalculator';
 import { SymptomAnalyzer } from './components/SymptomAnalyzer';
 import { NearbyHospitals } from './components/NearbyHospitals';
 import { HEALTH_CHECKS } from './constants';
-import { StethoscopeIcon, DownloadIcon, ShareIcon, ShareIcon as ShareIconSmall, SettingsIcon } from './components/icons';
+import { StethoscopeIcon, DownloadIcon, ShareIcon, ShareIcon as ShareIconSmall } from './components/icons';
 import { ShareModal } from './components/ShareModal';
 import { Modal } from './components/Modal';
-import { SYSTEM_CONFIG } from './constants';
 
 // Simulated base count to match the 100k scenario
 const BASE_USAGE_COUNT = 102450;
@@ -23,51 +22,8 @@ const App: React.FC = () => {
   const [isIOS, setIsIOS] = useState(false);
   const [totalUsage, setTotalUsage] = useState(BASE_USAGE_COUNT);
   const [activeUsers, setActiveUsers] = useState(842); // Simulate active users
-
-  // Settings State (Logic kept for internal state consistency, but UI removed)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
   
-  // System Status State
-  const [systemStatus, setSystemStatus] = useState({ valid: false, source: '' });
-
-  // Helper to check key status reliably
-  const checkKeyStatus = () => {
-    try {
-        // 1. Check Global Config (Highest Priority for Mass Usage)
-        if (SYSTEM_CONFIG.GLOBAL_API_KEY && SYSTEM_CONFIG.GLOBAL_API_KEY.trim().length > 0) {
-            return { valid: true, source: 'การตั้งค่าจากระบบหลัก (Global Config)' };
-        }
-
-        // 2. Check Local Storage
-        const localKey = localStorage.getItem('shc_api_key');
-        if (localKey && localKey.trim().length > 0) {
-            return { valid: true, source: 'การตั้งค่าในเครื่อง (Local Settings)' };
-        }
-
-        // 3. Check Env (Safe Access)
-        // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
-             return { valid: true, source: 'ระบบ Cloud (Vite)' };
-        }
-        // @ts-ignore
-        if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-            return { valid: true, source: 'ระบบ Cloud (Environment)' };
-        }
-    } catch (e) {
-        console.warn("Error checking key status", e);
-    }
-    return { valid: false, source: 'โหมดพื้นฐาน (Offline Fallback)' };
-  };
-
   useEffect(() => {
-    // Load saved API Key on mount to state (for display purposes only if needed)
-    const savedKey = localStorage.getItem('shc_api_key');
-    if (savedKey) setApiKeyInput(savedKey);
-
-    // Check Status on Mount
-    setSystemStatus(checkKeyStatus());
-
     // Simulate active users fluctuation
     const interval = setInterval(() => {
       setActiveUsers(prev => {
@@ -77,7 +33,7 @@ const App: React.FC = () => {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [isSettingsOpen]); // Re-check when settings modal opens/closes
+  }, []);
 
   useEffect(() => {
     // Check if running in standalone mode (installed)
@@ -168,23 +124,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveSettings = () => {
-    if (apiKeyInput.trim()) {
-      localStorage.setItem('shc_api_key', apiKeyInput.trim());
-      alert('บันทึกการตั้งค่าเรียบร้อยครับ');
-      setIsSettingsOpen(false);
-      setSystemStatus(checkKeyStatus()); // Update status immediately
-      window.location.reload(); // Reload to ensure components pick up the new key
-    } else {
-        // If empty, allow clearing
-        localStorage.removeItem('shc_api_key');
-        alert('ลบการตั้งค่าเรียบร้อย กลับไปใช้ค่าเริ่มต้น');
-        setIsSettingsOpen(false);
-        setSystemStatus(checkKeyStatus()); // Update status immediately
-        window.location.reload();
-    }
-  };
-
   const handleToggle = (key: string) => {
     setOpenAccordion(prevKey => (prevKey === key ? null : key));
   };
@@ -220,18 +159,6 @@ const App: React.FC = () => {
                     {activeUsers.toLocaleString()} ใช้งานอยู่
                 </div>
                 
-                {/* System Status Badge */}
-                <div className={`flex items-center px-3 py-1 rounded-full text-xs font-bold border transition-colors duration-300 ${
-                    systemStatus.valid 
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                        : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                }`}>
-                    <span className={`w-2 h-2 rounded-full mr-1.5 ${
-                        systemStatus.valid ? 'bg-emerald-500 animate-pulse' : 'bg-indigo-500'
-                    }`}></span>
-                    <span>{systemStatus.valid ? 'AI ออนไลน์' : 'พร้อมใช้งาน'}</span>
-                </div>
-
                 <button
                   onClick={handleShare}
                   className="flex items-center justify-center w-9 h-9 md:w-auto md:h-auto md:space-x-2 md:px-4 md:py-2 bg-slate-200 text-slate-800 text-sm font-semibold rounded-lg shadow-sm hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
@@ -341,15 +268,6 @@ const App: React.FC = () => {
       </div>
       <ShareModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
       
-      {/* Settings Modal (Hidden Logic) */}
-      <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
-         {/* Settings Content Kept for Logic Safety but Trigger Removed */}
-         <div className="text-center p-2">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">ตั้งค่า</h3>
-            <button onClick={() => setIsSettingsOpen(false)} className="bg-slate-200 px-4 py-2 rounded">ปิด</button>
-         </div>
-      </Modal>
-
       {/* Install Instruction Modal */}
       <Modal isOpen={isInstallInstructionOpen} onClose={() => setIsInstallInstructionOpen(false)}>
          <div className="text-center p-2">
