@@ -26,11 +26,41 @@ const App: React.FC = () => {
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
+  
+  // System Status State
+  const [systemStatus, setSystemStatus] = useState({ valid: false, source: '' });
+
+  // Helper to check key status reliably
+  const checkKeyStatus = () => {
+    try {
+        // 1. Check Local Storage
+        const localKey = localStorage.getItem('shc_api_key');
+        if (localKey && localKey.trim().length > 0) {
+            return { valid: true, source: 'การตั้งค่าในเครื่อง (Local Settings)' };
+        }
+
+        // 2. Check Env (Safe Access)
+        // @ts-ignore
+        if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+            return { valid: true, source: 'ระบบ Cloud (Environment)' };
+        }
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+             return { valid: true, source: 'ระบบ Cloud (Vite)' };
+        }
+    } catch (e) {
+        console.warn("Error checking key status", e);
+    }
+    return { valid: false, source: 'โหมดพื้นฐาน (Offline Fallback)' };
+  };
 
   useEffect(() => {
     // Load saved API Key on mount to state (for display purposes only if needed)
     const savedKey = localStorage.getItem('shc_api_key');
     if (savedKey) setApiKeyInput(savedKey);
+
+    // Check Status on Mount
+    setSystemStatus(checkKeyStatus());
 
     // Simulate active users fluctuation
     const interval = setInterval(() => {
@@ -41,7 +71,7 @@ const App: React.FC = () => {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isSettingsOpen]); // Re-check when settings modal opens/closes
 
   useEffect(() => {
     // Check if running in standalone mode (installed)
@@ -137,12 +167,14 @@ const App: React.FC = () => {
       localStorage.setItem('shc_api_key', apiKeyInput.trim());
       alert('บันทึกการตั้งค่าเรียบร้อยครับ');
       setIsSettingsOpen(false);
+      setSystemStatus(checkKeyStatus()); // Update status immediately
       window.location.reload(); // Reload to ensure components pick up the new key
     } else {
         // If empty, allow clearing
         localStorage.removeItem('shc_api_key');
         alert('ลบการตั้งค่าเรียบร้อย กลับไปใช้ค่าเริ่มต้น');
         setIsSettingsOpen(false);
+        setSystemStatus(checkKeyStatus()); // Update status immediately
         window.location.reload();
     }
   };
@@ -184,10 +216,12 @@ const App: React.FC = () => {
                 
                 <button
                   onClick={() => setIsSettingsOpen(true)}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors relative"
                   aria-label="ตั้งค่าระบบ"
                 >
                   <SettingsIcon className="w-6 h-6" />
+                  {/* API Key Status Indicator Dot */}
+                  <span className={`absolute top-1 right-1 w-2.5 h-2.5 rounded-full border border-white ${systemStatus.valid ? 'bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.6)]' : 'bg-slate-400'}`}></span>
                 </button>
 
                 <button
@@ -305,12 +339,23 @@ const App: React.FC = () => {
              <div className="w-12 h-12 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center mx-auto mb-4">
                  <SettingsIcon className="w-6 h-6" />
              </div>
-             <h3 className="text-xl font-bold text-slate-800 mb-2">
-                 ตั้งค่าระบบ (สำหรับเจ้าของ)
+             <h3 className="text-xl font-bold text-slate-800 mb-4">
+                 ตั้งค่าระบบ (Admin)
              </h3>
-             <p className="text-sm text-slate-500 mb-4">
-                 หากแอปแจ้งเตือนว่าไม่ได้เชื่อมต่อ ต้องใส่ Google API Key เพื่อเปิดใช้งาน AI ครับ
-             </p>
+             
+             {/* System Status Banner */}
+             <div className={`mb-6 p-4 rounded-lg text-left border ${systemStatus.valid ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">สถานะการเชื่อมต่อ</p>
+                <div className="flex items-center">
+                   <span className={`w-3 h-3 rounded-full mr-2 ${systemStatus.valid ? 'bg-green-500' : 'bg-slate-400'}`}></span>
+                   <span className={`font-bold ${systemStatus.valid ? 'text-green-700' : 'text-slate-600'}`}>
+                      {systemStatus.valid ? 'เชื่อมต่อ AI แล้ว' : 'ไม่ได้เชื่อมต่อ AI'}
+                   </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 pl-5">
+                   แหล่งที่มา: {systemStatus.source}
+                </p>
+             </div>
              
              <a 
                 href="https://aistudio.google.com/app/apikey" 
@@ -322,14 +367,15 @@ const App: React.FC = () => {
              </a>
              
              <div className="text-left mb-4">
-                 <label className="block text-sm font-medium text-slate-700 mb-1">วาง API Key ที่นี่</label>
+                 <label className="block text-sm font-medium text-slate-700 mb-1">วาง API Key ที่นี่ (หากต้องการเปลี่ยน)</label>
                  <input 
                     type="password" 
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                     placeholder="AIzaSy..."
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm font-mono"
                  />
+                 <p className="text-xs text-slate-400 mt-1">ระบบจะใช้ Key นี้เป็นหลักก่อน Key ใน Cloud</p>
              </div>
              
              <div className="flex gap-3">

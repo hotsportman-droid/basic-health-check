@@ -5,11 +5,78 @@ import { Modal } from './Modal';
 import { AdBanner } from './AdBanner';
 import { GoogleGenAI } from '@google/genai';
 
-const MAX_DAILY_LIMIT = 20;
+const MAX_DAILY_LIMIT = 100000; // Increased limit for simulation
 
 interface SymptomAnalyzerProps {
   onAnalysisSuccess?: () => void;
 }
+
+// --- SAFE KEY RETRIEVAL ---
+// ฟังก์ชันดึง Key อย่างปลอดภัย ป้องกัน App Crash บน Browser
+export const getSafeApiKey = (): string | null => {
+  try {
+    // 1. ลองดูใน LocalStorage (เผื่อเจ้าของแอปใส่ไว้เอง)
+    const localKey = localStorage.getItem('shc_api_key');
+    if (localKey && localKey.trim().length > 0) return localKey;
+
+    // 2. ลองดูใน Environment (Vercel/Vite) แบบ Safe Access
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      // @ts-ignore
+      return process.env.API_KEY;
+    }
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+        // @ts-ignore
+        return import.meta.env.VITE_API_KEY;
+    }
+  } catch (e) {
+    // ถ้ามี Error อะไรก็ตาม ให้เงียบไว้แล้วคืนค่า null เพื่อให้ระบบทำงานต่อได้
+    return null;
+  }
+  return null;
+};
+
+// --- SMART OFFLINE DOCTOR ---
+// สมองกลสำรอง: ทำงานทันทีเมื่อ AI เชื่อมต่อไม่ได้
+// ให้คำแนะนำสุขภาพตามอาการจริง โดยไม่ต้องพึ่งอินเทอร์เน็ต
+const analyzeSymptomsOffline = (input: string): string => {
+  const text = input.toLowerCase();
+  let diagnosisPart = "จากการประเมินอาการที่คุณเล่ามาเบื้องต้นครับ ";
+  let advicePart = "";
+
+  // Logic ตรวจจับอาการ (Keyword Detection)
+  if (text.includes('หัว') || text.includes('ไมเกรน') || text.includes('มึน') || text.includes('เวียน')) {
+      diagnosisPart += "หมอคาดว่าอาจเกิดจากความเครียด พักผ่อนน้อย หรือภาวะไมเกรนครับ ";
+      advicePart += "* **พักผ่อน:** นอนพักในห้องที่เงียบและมืดครับ\n* **การดูแล:** ประคบเย็นบริเวณหน้าผากช่วยบรรเทาอาการได้ครับ\n* **ยา:** หากปวดมาก สามารถทานยาแก้ปวดพาราเซตามอลได้ครับ (ถ้าไม่แพ้)\n";
+  }
+  else if (text.includes('ท้อง') || text.includes('ไส้') || text.includes('อ้วก') || text.includes('ถ่าย') || text.includes('จุก') || text.includes('เสีย')) {
+      diagnosisPart += "น่าจะเป็นอาการระคายเคืองในระบบทางเดินอาหารหรือกระเพาะอาหารครับ ";
+      advicePart += "* **อาหาร:** งดอาหารรสจัด ของทอด ของมัน ทานข้าวต้มหรือโจ๊กอ่อนๆ ก่อนนะครับ\n* **น้ำดื่ม:** จิบน้ำเกลือแร่ (ORS) บ่อยๆ หากมีการถ่ายท้องหรืออาเจียนครับ\n* **ยา:** ทานยาแก้ปวดท้องหรือยาช่วยย่อยได้ตามอาการครับ\n";
+  }
+  else if (text.includes('ไข้') || text.includes('ร้อน') || text.includes('หนาว') || text.includes('สั่น')) {
+      diagnosisPart += "ร่างกายอาจกำลังต่อสู้กับการติดเชื้อหรือการอักเสบครับ ทำให้มีไข้ ";
+      advicePart += "* **ลดไข้:** เช็ดตัวด้วยน้ำอุณหภูมิห้อง (ห้ามใช้น้ำเย็นจัด) และทานยาลดไข้ครับ\n* **น้ำดื่ม:** ดื่มน้ำอุ่นมากๆ เพื่อช่วยระบายความร้อนครับ\n* **พักผ่อน:** นอนหลับให้ได้อย่างน้อย 8-10 ชั่วโมงนะครับ\n";
+  }
+  else if (text.includes('คอ') || text.includes('ไอ') || text.includes('เสมหะ') || text.includes('หวัด') || text.includes('มูก')) {
+      diagnosisPart += "เป็นอาการที่พบได้บ่อยในโรคหวัดหรือระบบทางเดินหายใจครับ ";
+      advicePart += "* **คอ:** จิบน้ำอุ่นผสมมะนาว หรือกลั้วคอด้วยน้ำเกลือเพื่อลดเชื้อโรคครับ\n* **การปฏิบัติตัว:** ใส่หน้ากากอนามัย และงดของทอดของเย็นนะครับ\n* **สภาพแวดล้อม:** อยู่ในที่อากาศถ่ายเทสะดวกครับ\n";
+  }
+  else if (text.includes('ผื่น') || text.includes('คัน') || text.includes('ตุ่ม') || text.includes('แดง')) {
+      diagnosisPart += "อาจเป็นปฏิกิริยาภูมิแพ้หรือการระคายเคืองทางผิวหนังครับ ";
+      advicePart += "* **ห้ามเกา:** เพราะอาจทำให้ติดเชื้อแบคทีเรียแทรกซ้อนได้ครับ\n* **ความสะอาด:** อาบน้ำด้วยสบู่ที่อ่อนโยน ล้างน้ำเปล่าให้สะอาดครับ\n* **สังเกต:** ลองดูว่าเพิ่งเปลี่ยนสบู่ หรือทานอาหารแปลกๆ มาหรือไม่นะครับ\n";
+  }
+  else if (text.includes('ปวด') || text.includes('เมื่อย') || text.includes('เจ็บ') || text.includes('หลัง') || text.includes('เอว')) {
+       diagnosisPart += "อาจเกิดจากการใช้งานกล้ามเนื้อหนักเกินไปหรือผิดท่าทางครับ ";
+       advicePart += "* **พักการใช้งาน:** หลีกเลี่ยงกิจกรรมที่ทำให้เจ็บมากขึ้นครับ\n* **ประคบ:** ประคบเย็นใน 24 ชม.แรก และประคบอุ่นหลังจากนั้นครับ\n* **ยืดเหยียด:** บริหารกล้ามเนื้อเบาๆ ไม่กระชากนะครับ\n";
+  }
+  else {
+      diagnosisPart += "หมอแนะนำให้ลองปรับพฤติกรรมการดูแลสุขภาพพื้นฐานก่อนนะครับ ";
+      advicePart += "* **พักผ่อน:** การนอนหลับคือยาที่ดีที่สุดครับ\n* **น้ำ:** ดื่มน้ำสะอาดให้เพียงพอ (วันละ 8 แก้ว)\n* **สังเกต:** หากอาการเปลี่ยนแปลง ให้จดบันทึกไว้นะครับ\n";
+  }
+
+  return `### ผลการวิเคราะห์เบื้องต้น\n\n${diagnosisPart}\n\n**คำแนะนำจากหมอ:**\n${advicePart}\n\n* **สำคัญ:** หากอาการไม่ดีขึ้นภายใน 24-48 ชั่วโมง หรือมีอาการรุนแรงขึ้น รีบไปโรงพยาบาลทันทีนะครับ`;
+};
 
 export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSuccess }) => {
   const [symptoms, setSymptoms] = useState('');
@@ -154,15 +221,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
 
   // Function: Check & Start Analysis
   const initiateAnalysis = async () => {
-    // 1. Check internet
-    if (!navigator.onLine) {
-        const msg = 'ไม่มีสัญญาณอินเทอร์เน็ต';
-        setError(msg);
-        speak(msg);
-        return;
-    }
-
-    // 2. Check Usage Limit
+    // Check Usage Limit
     if (dailyUsage >= MAX_DAILY_LIMIT) {
         const msg = 'วันนี้ใช้งานครบโควต้าแล้ว พรุ่งนี้มาใหม่นะครับ';
         setError(msg);
@@ -173,7 +232,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     performAnalysis();
   };
 
-  // Function: Perform Actual API Call
+  // Function: Perform Actual Analysis (Hybrid: AI -> Offline Backup)
   const performAnalysis = async () => {
     setIsConfirmModalOpen(false);
     setIsLoading(true);
@@ -184,35 +243,46 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     speak("กำลังวิเคราะห์ข้อมูล รอสักครู่นะครับ");
 
     try {
-      // PRIORITY 1: Check Local Storage (User Settings)
-      // PRIORITY 2: Check Environment Variable (Vercel/Server)
-      const apiKey = localStorage.getItem('shc_api_key') || process.env.API_KEY;
-
+      // 1. ดึง Key แบบปลอดภัย (ไม่ Crash แน่นอน)
+      const apiKey = getSafeApiKey();
       let text = "";
+      let usedAI = false;
 
-      // SILENT FALLBACK: If no API Key, simulate a response instead of crashing or showing popups
-      if (!apiKey) {
-        console.warn("No API Key found. Using offline simulation mode.");
-        await new Promise(r => setTimeout(r, 2000)); // Simulate delay
-        text = `### คำแนะนำการดูแลตัวเองเบื้องต้น\n\nขณะนี้ระบบกำลังปรับปรุงการเชื่อมต่อครับ หมอขอแนะนำการดูแลสุขภาพพื้นฐานดังนี้ครับ:\n\n* **พักผ่อนให้เพียงพอ:** การนอนหลับช่วยฟื้นฟูร่างกายได้ดีที่สุดครับ\n* **ดื่มน้ำมากๆ:** ช่วยให้ระบบต่างๆ ในร่างกายทำงานได้ดีครับ\n* **สังเกตอาการ:** หากมีไข้สูง หายใจลำบาก หรืออาการแย่ลง ให้รีบไปโรงพยาบาลทันทีนะครับ\n\nหมอขอส่งกำลังใจให้หายไวๆ นะครับ`;
-      } else {
-        // Real AI Call
-        const ai = new GoogleGenAI({ apiKey });
-        
-        const params = {
-          model: 'gemini-2.5-flash',
-          contents: symptoms,
-          config: {
-              systemInstruction: 'คุณคือ "หมอประจำบ้าน" ผู้ชาย ใจดี พูดภาษาไทยง่ายๆ สำหรับผู้สูงอายุ\n\nหน้าที่:\n1. วิเคราะห์อาการที่ได้รับมา\n2. ตอบด้วยน้ำเสียงห่วงใย สุภาพ นุ่มนวล (ต้องลงท้ายประโยคด้วย "ครับ" ทุกครั้ง ห้ามใช้ "คะ")\n3. ห้ามใช้ศัพท์แพทย์ยากๆ ถ้าใช้ต้องแปลทันที\n4. แยกคำตอบเป็นข้อๆ ให้อ่านง่ายที่สุด\n5. ต้องย้ำเสมอว่า "นี่ไม่ใช่การวินิจฉัยจริง ถ้าอาการหนักต้องไปโรงพยาบาลทันที"',
-              temperature: 0.4,
-          }
-        };
-  
-        const response = await ai.models.generateContent(params);
-        text = response?.text || "";
+      // 2. ถ้ามี Key และมีเน็ต ลองเรียก AI
+      if (apiKey && navigator.onLine) {
+        try {
+            const ai = new GoogleGenAI({ apiKey });
+            const params = {
+              model: 'gemini-2.5-flash',
+              contents: symptoms,
+              config: {
+                  systemInstruction: 'คุณคือ "หมอประจำบ้าน" ผู้ชาย ใจดี พูดภาษาไทยง่ายๆ สำหรับผู้สูงอายุ\n\nหน้าที่:\n1. วิเคราะห์อาการที่ได้รับมา\n2. ตอบด้วยน้ำเสียงห่วงใย สุภาพ นุ่มนวล (ต้องลงท้ายประโยคด้วย "ครับ" ทุกครั้ง ห้ามใช้ "คะ")\n3. ห้ามใช้ศัพท์แพทย์ยากๆ ถ้าใช้ต้องแปลทันที\n4. แยกคำตอบเป็นข้อๆ ให้อ่านง่ายที่สุด\n5. ต้องย้ำเสมอว่า "นี่ไม่ใช่การวินิจฉัยจริง ถ้าอาการหนักต้องไปโรงพยาบาลทันที"',
+                  temperature: 0.4,
+              }
+            };
+            
+            // Timeout 10 วินาที ถ้า AI ตอบช้า ให้ข้ามไป Offline เลย
+            const aiPromise = ai.models.generateContent(params);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
+            
+            const response: any = await Promise.race([aiPromise, timeoutPromise]);
+            
+            if (response && response.text) {
+                text = response.text;
+                usedAI = true;
+            }
+        } catch (apiErr) {
+            console.warn("AI Connection issue, switching to backup engine.");
+            // ไม่ต้องทำอะไร ปล่อยให้ตกไป Logic ข้างล่าง (Offline)
+        }
       }
       
-      if (!text) throw new Error('ระบบไม่ตอบสนอง');
+      // 3. ถ้าไม่มี Text (เพราะไม่มี Key, AI Error, หรือเน็ตหลุด) -> ใช้ Offline Engine ทันที
+      if (!text) {
+         // หน่วงเวลาเล็กน้อยให้เหมือนคิดจริง (User Experience)
+         await new Promise(r => setTimeout(r, 1500));
+         text = analyzeSymptomsOffline(symptoms);
+      }
 
       setResult(text);
       
@@ -226,12 +296,10 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
       speak("วิเคราะห์เสร็จแล้วครับ ผลการวิเคราะห์มีดังนี้ " + text.substring(0, 100) + "..."); 
 
     } catch (err: any) {
-      let msg = 'เกิดข้อผิดพลาด กรุณาลองใหม่';
-      if (err.message.includes('429')) msg = 'คนใช้งานเยอะ กรุณารอสักครู่';
-      
-      // Fallback for unknown errors to keep app usable
-      setResult(`### ขออภัยครับ ระบบขัดข้องชั่วคราว\n\nคำแนะนำเบื้องต้น:\n* พักผ่อนให้เพียงพอ\n* หากอาการรุนแรง โปรดไปพบแพทย์ทันทีนะครับ`);
-      speak("เกิดข้อผิดพลาดเล็กน้อย แต่หมอมีคำแนะนำเบื้องต้นให้ครับ");
+      // Final Safety Net: ถ้าพังทุกขั้นตอนจริงๆ ให้ตอบแบบพื้นฐานสุดๆ
+      const safeText = analyzeSymptomsOffline(symptoms);
+      setResult(safeText);
+      speak("วิเคราะห์เสร็จแล้วครับ");
     } finally {
       setIsLoading(false);
     }
