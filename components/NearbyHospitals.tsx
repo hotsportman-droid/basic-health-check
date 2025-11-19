@@ -18,6 +18,18 @@ export const NearbyHospitals: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
+    // 1. Open window immediately (bypass popup blocker)
+    const newWindow = window.open('', '_blank');
+
+    if (!newWindow) {
+        setIsLoading(false);
+        setError('Pop-up ถูกบล็อก กรุณาอนุญาตให้เปิดหน้าต่างใหม่');
+        return;
+    }
+
+    // Optional: Show loading text in new window
+    newWindow.document.write('<html><body style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;">กำลังค้นหาตำแหน่งและเปิดแผนที่...</body></html>');
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -26,12 +38,15 @@ export const NearbyHospitals: React.FC = () => {
         const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา ใกล้ฉัน");
         const url = `https://www.google.com/maps/search/${query}/@${latitude},${longitude},11z`;
         
-        // Open the URL in a new tab
-        window.open(url, '_blank');
+        // 2. Redirect the pre-opened window to Google Maps
+        newWindow.location.href = url;
         
         setIsLoading(false);
       },
       (err) => {
+        // 3. Close window if failed
+        newWindow.close();
+
         switch (err.code) {
           case err.PERMISSION_DENIED:
             setError('คุณปฏิเสธการเข้าถึงตำแหน่ง');
