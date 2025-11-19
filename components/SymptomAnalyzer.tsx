@@ -106,6 +106,10 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
   // Voice Output States
   const [isSpeaking, setIsSpeaking] = useState(false);
 
+  // Result Source State: 'AI' or 'OFFLINE'
+  const [resultSource, setResultSource] = useState<'AI' | 'OFFLINE'>('OFFLINE');
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
+
   // Helper to speak text (Accessibility)
   const speak = (text: string, force: boolean = false) => {
     if (!('speechSynthesis' in window)) return;
@@ -248,6 +252,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     setLoadingStatus('หมอกำลังวิเคราะห์ข้อมูล...');
     setError(null);
     setResult('');
+    setDebugInfo(null);
     
     speak("กำลังวิเคราะห์ข้อมูล รอสักครู่นะครับ");
 
@@ -255,7 +260,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
       // 1. ดึง Key แบบปลอดภัย (ไม่ Crash แน่นอน)
       const apiKey = getSafeApiKey();
       let text = "";
-      let usedAI = false;
+      let currentDebugInfo = null;
 
       // 2. ถ้ามี Key และมีเน็ต ลองเรียก AI
       if (apiKey && navigator.onLine) {
@@ -270,20 +275,24 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
               }
             };
             
-            // Timeout 10 วินาที ถ้า AI ตอบช้า ให้ข้ามไป Offline เลย
+            // Timeout 25 วินาที (เพิ่มขึ้นเพื่อให้โอกาส AI คิดนานขึ้น โดยเฉพาะเน็ตช้า)
             const aiPromise = ai.models.generateContent(params);
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 25000));
             
             const response: any = await Promise.race([aiPromise, timeoutPromise]);
             
             if (response && response.text) {
                 text = response.text;
-                usedAI = true;
+                setResultSource('AI');
             }
-        } catch (apiErr) {
-            console.warn("AI Connection issue, switching to backup engine.");
-            // ไม่ต้องทำอะไร ปล่อยให้ตกไป Logic ข้างล่าง (Offline)
+        } catch (apiErr: any) {
+            console.warn("AI Connection issue, switching to backup engine.", apiErr);
+            const reason = apiErr.message === "Timeout" ? "Connection Timed Out (Internet slow)" : (apiErr.message || 'Unknown Error');
+            currentDebugInfo = `AI Error: ${reason}`;
         }
+      } else {
+          if (!apiKey) currentDebugInfo = "API Key Missing";
+          if (!navigator.onLine) currentDebugInfo = "Device Offline";
       }
       
       // 3. ถ้าไม่มี Text (เพราะไม่มี Key, AI Error, หรือเน็ตหลุด) -> ใช้ Offline Engine ทันที
@@ -291,9 +300,12 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
          // หน่วงเวลาเล็กน้อยให้เหมือนคิดจริง (User Experience)
          await new Promise(r => setTimeout(r, 1500));
          text = analyzeSymptomsOffline(symptoms);
+         setResultSource('OFFLINE');
+         if (!currentDebugInfo) currentDebugInfo = "Fallback triggered (Internal Logic)";
       }
 
       setResult(text);
+      setDebugInfo(currentDebugInfo);
       
       // Update usage
       const newCount = dailyUsage + 1;
@@ -308,6 +320,8 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
       // Final Safety Net: ถ้าพังทุกขั้นตอนจริงๆ ให้ตอบแบบพื้นฐานสุดๆ
       const safeText = analyzeSymptomsOffline(symptoms);
       setResult(safeText);
+      setResultSource('OFFLINE');
+      setDebugInfo(`Critical System Crash: ${err.message}`);
       speak("วิเคราะห์เสร็จแล้วครับ");
     } finally {
       setIsLoading(false);
@@ -412,7 +426,9 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
             <div className="mt-6 bg-green-50 p-6 rounded-2xl border-2 border-green-100 animate-fade-in shadow-sm" role="region" aria-label="ผลการวิเคราะห์">
               <div className="flex justify-between items-start mb-4 border-b border-green-200 pb-2">
                 <h4 className="text-lg font-bold text-green-800 flex items-center">
-                    👨‍⚕️ ผลการวิเคราะห์
+                    {resultSource === 'AI' 
+                        ? "👨‍⚕️ ผลการวิเคราะห์ (จากระบบ AI อัจฉริยะ ✨)" 
+                        : "👨‍⚕️ ผลการวิเคราะห์ (จากระบบพื้นฐาน 📝)"}
                 </h4>
                 <button 
                   onClick={toggleSpeakingResult}
@@ -435,6 +451,15 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
                     โปรดจำไว้ว่า: หมอ AI เป็นเพียงตัวช่วยเบื้องต้น หากอาการไม่ดีขึ้น หรือรู้สึกแย่ลง ต้องไปโรงพยาบาลทันทีนะครับ
                  </p>
               </div>
+
+              {/* Debug Info Section - Only shows in offline/fallback mode */}
+              {resultSource === 'OFFLINE' && debugInfo && (
+                <div className="mt-4 pt-2 border-t border-slate-200/50">
+                    <p className="text-[11px] text-slate-400 font-mono">
+                        Debug Reason: {debugInfo}
+                    </p>
+                </div>
+              )}
             </div>
           )}
         </div>
