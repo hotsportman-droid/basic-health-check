@@ -1,1 +1,3 @@
-// This file is no longer needed. You can delete it from your project.
+// DELETE ME NOW
+// This file is not used in the application.
+// Please delete this file manually from your project structure.

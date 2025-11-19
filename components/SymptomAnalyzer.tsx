@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BrainIcon, MicIcon } from './icons';
+import { BrainIcon, MicIcon, SpeakerWaveIcon, StopIcon } from './icons';
 import { Modal } from './Modal';
 import { AdBanner } from './AdBanner';
 
@@ -17,6 +17,9 @@ export const SymptomAnalyzer: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
+  // Voice Output States
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
   useEffect(() => {
     // Load usage data from local storage
     const today = new Date().toDateString();
@@ -31,6 +34,13 @@ export const SymptomAnalyzer: React.FC = () => {
     } else {
       setDailyUsage(storedCount);
     }
+
+    // Cleanup speech synthesis when component unmounts
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, []);
 
   const toggleListening = () => {
@@ -78,6 +88,36 @@ export const SymptomAnalyzer: React.FC = () => {
     recognition.start();
   };
 
+  const toggleSpeaking = () => {
+    if (!('speechSynthesis' in window)) {
+      alert('เบราว์เซอร์ของคุณไม่รองรับการอ่านออกเสียง');
+      return;
+    }
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    } else {
+      // Remove markdown symbols for better speech
+      const cleanText = result.replace(/[#*]/g, '');
+      
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'th-TH';
+      
+      utterance.onend = () => {
+        setIsSpeaking(false);
+      };
+      
+      utterance.onerror = (e) => {
+        console.error('Speech synthesis error', e);
+        setIsSpeaking(false);
+      };
+
+      window.speechSynthesis.speak(utterance);
+      setIsSpeaking(true);
+    }
+  };
+
   const handleAnalyze = async () => {
     if (!symptoms.trim()) {
       setError('กรุณาป้อนอาการของคุณ');
@@ -95,6 +135,11 @@ export const SymptomAnalyzer: React.FC = () => {
     setIsLoading(true);
     setError(null);
     setResult('');
+    // Stop speaking if analyzing new text
+    if (isSpeaking) {
+        window.speechSynthesis.cancel();
+        setIsSpeaking(false);
+    }
 
     try {
       // Call our secure backend function (Groq)
@@ -226,8 +271,26 @@ export const SymptomAnalyzer: React.FC = () => {
           )}
 
           {result && !isLoading && (
-            <div className="mt-6 bg-slate-50 p-4 rounded-lg border border-slate-200" aria-live="polite">
-              <h4 className="font-bold text-slate-800 mb-2">ผลการวิเคราะห์เบื้องต้น:</h4>
+            <div className="mt-6 bg-slate-50 p-4 rounded-lg border border-slate-200 relative" aria-live="polite">
+              <div className="flex justify-between items-start mb-2">
+                <h4 className="font-bold text-slate-800">ผลการวิเคราะห์เบื้องต้น:</h4>
+                <button 
+                  onClick={toggleSpeaking}
+                  className="flex items-center space-x-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors"
+                >
+                  {isSpeaking ? (
+                    <>
+                      <StopIcon className="w-4 h-4" />
+                      <span>หยุดอ่าน</span>
+                    </>
+                  ) : (
+                    <>
+                      <SpeakerWaveIcon className="w-4 h-4" />
+                      <span>อ่านให้ฟัง</span>
+                    </>
+                  )}
+                </button>
+              </div>
               <div className="prose prose-sm max-w-none text-slate-700 pr-2" dangerouslySetInnerHTML={{ __html: result.replace(/###/g, '<h3>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}></div>
               <div className="mt-4 p-3 bg-red-100 border-l-4 border-red-500 text-red-700 text-sm">
                 <p className="font-bold">ข้อควรจำที่สำคัญ:</p>
