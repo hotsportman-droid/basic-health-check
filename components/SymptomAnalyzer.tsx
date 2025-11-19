@@ -4,6 +4,7 @@ import { BrainIcon, MicIcon, SpeakerWaveIcon, StopIcon } from './icons';
 import { Modal } from './Modal';
 import { AdBanner } from './AdBanner';
 import { GoogleGenAI } from '@google/genai';
+import { SYSTEM_CONFIG } from '../constants';
 
 const MAX_DAILY_LIMIT = 100000; // Increased limit for simulation
 
@@ -13,25 +14,33 @@ interface SymptomAnalyzerProps {
 
 // --- SAFE KEY RETRIEVAL ---
 // ฟังก์ชันดึง Key อย่างปลอดภัย ป้องกัน App Crash บน Browser
+// ลำดับความสำคัญ: 
+// 1. ค่าที่ฝังในโค้ด (GLOBAL_API_KEY) -> เพื่อให้ทุกคนใช้ได้เลย
+// 2. ค่าใน LocalStorage (ถ้ามีคนอยาก override)
+// 3. Environment Variables (Vercel/Vite)
 export const getSafeApiKey = (): string | null => {
   try {
-    // 1. ลองดูใน LocalStorage (เผื่อเจ้าของแอปใส่ไว้เอง)
+    // 1. GLOBAL KEY (Priority สำหรับ Public App)
+    if (SYSTEM_CONFIG.GLOBAL_API_KEY && SYSTEM_CONFIG.GLOBAL_API_KEY.trim().length > 0) {
+        return SYSTEM_CONFIG.GLOBAL_API_KEY;
+    }
+
+    // 2. LocalStorage
     const localKey = localStorage.getItem('shc_api_key');
     if (localKey && localKey.trim().length > 0) return localKey;
 
-    // 2. ลองดูใน Environment (Vercel/Vite) แบบ Safe Access
-    // @ts-ignore
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      // @ts-ignore
-      return process.env.API_KEY;
-    }
+    // 3. Environment Variables (Safe Access)
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
         // @ts-ignore
         return import.meta.env.VITE_API_KEY;
     }
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      // @ts-ignore
+      return process.env.API_KEY;
+    }
   } catch (e) {
-    // ถ้ามี Error อะไรก็ตาม ให้เงียบไว้แล้วคืนค่า null เพื่อให้ระบบทำงานต่อได้
     return null;
   }
   return null;

@@ -3,6 +3,14 @@ import React from 'react';
 import type { HealthCheckItem } from './types';
 import { HeartIcon, LungIcon, MouthIcon, SkinIcon, BloodDropIcon, PressureIcon } from './components/icons';
 
+// --- ส่วนตั้งค่าระบบ (System Configuration) ---
+export const SYSTEM_CONFIG = {
+  // 📢 สำคัญมาก: ใส่ API Key ของคุณตรงนี้ (ในเครื่องหมายคำพูด)
+  // เมื่อใส่แล้ว ผู้ใช้งานทุกคนจะใช้งานได้ทันทีโดยไม่ต้องตั้งค่าเอง
+  // ตัวอย่าง: 'AIzaSyDxxxxxx...'
+  GLOBAL_API_KEY: '', 
+};
+
 export const HEALTH_CHECKS: HealthCheckItem[] = [
   {
     icon: React.createElement(HeartIcon),
