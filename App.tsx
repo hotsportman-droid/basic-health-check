@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [totalUsage, setTotalUsage] = useState(0);
 
   useEffect(() => {
     // Check if running in standalone mode (installed)
@@ -29,6 +30,10 @@ const App: React.FC = () => {
     // Check if iOS
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
+
+    // Load total usage
+    const storedTotal = parseInt(localStorage.getItem('shc_total_usage') || '0', 10);
+    setTotalUsage(storedTotal);
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -75,6 +80,12 @@ const App: React.FC = () => {
 
   const handleToggle = (key: string) => {
     setOpenAccordion(prevKey => (prevKey === key ? null : key));
+  };
+
+  const handleUsageIncrement = () => {
+    const newTotal = totalUsage + 1;
+    setTotalUsage(newTotal);
+    localStorage.setItem('shc_total_usage', newTotal.toString());
   };
 
   const pulseCheck = HEALTH_CHECKS.find(
@@ -130,6 +141,10 @@ const App: React.FC = () => {
           
           {/* Hero Section */}
           <section className="text-center py-12">
+              <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-full shadow-sm border border-indigo-100 animate-fade-in">
+                <span className="flex h-2 w-2 rounded-full bg-indigo-600 mr-2 animate-pulse"></span>
+                เข้าใช้งานแล้ว {totalUsage.toLocaleString()} ครั้ง
+              </div>
               <h2 className="text-4xl md:text-5xl font-bold text-slate-800 tracking-tighter">
                   คู่มือตรวจสุขภาพด้วยตนเอง
               </h2>
@@ -141,7 +156,7 @@ const App: React.FC = () => {
           {/* Primary Tools Section */}
           <section className="mb-12">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                  <SymptomAnalyzer />
+                  <SymptomAnalyzer onAnalysisSuccess={handleUsageIncrement} />
                   <NearbyHospitals />
               </div>
           </section>

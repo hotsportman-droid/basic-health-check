@@ -5,14 +5,17 @@ import { AdBanner } from './AdBanner';
 
 const MAX_DAILY_LIMIT = 5;
 
-export const SymptomAnalyzer: React.FC = () => {
+interface SymptomAnalyzerProps {
+  onAnalysisSuccess?: () => void;
+}
+
+export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSuccess }) => {
   const [symptoms, setSymptoms] = useState('');
   const [result, setResult] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [dailyUsage, setDailyUsage] = useState(0);
-  const [totalUsage, setTotalUsage] = useState(0);
   
   // Voice Input States
   const [isListening, setIsListening] = useState(false);
@@ -26,7 +29,6 @@ export const SymptomAnalyzer: React.FC = () => {
     const today = new Date().toDateString();
     const storedDate = localStorage.getItem('shc_usage_date');
     const storedCount = parseInt(localStorage.getItem('shc_usage_count') || '0', 10);
-    const storedTotal = parseInt(localStorage.getItem('shc_total_usage') || '0', 10);
 
     if (storedDate !== today) {
       // Reset if it's a new day
@@ -36,7 +38,6 @@ export const SymptomAnalyzer: React.FC = () => {
     } else {
       setDailyUsage(storedCount);
     }
-    setTotalUsage(storedTotal);
 
     // Cleanup speech synthesis when component unmounts
     return () => {
@@ -63,29 +64,42 @@ export const SymptomAnalyzer: React.FC = () => {
     // Check browser support
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError(isInAppBrowser() 
-        ? 'เบราว์เซอร์ในแอปนี้ (In-App Browser) อาจไม่รองรับการสั่งงานด้วยเสียง แนะนำให้เปิดลิงก์ผ่าน Chrome หรือ Safari'
-        : 'เบราว์เซอร์ของคุณไม่รองรับการสั่งงานด้วยเสียง'
-      );
+      setError('เบราว์เซอร์ของคุณไม่รองรับการสั่งงานด้วยเสียง');
       return;
     }
     
     setError(null);
 
-    // Explicitly request microphone permission to ensure prompt appears and handle denial gracefully
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Permission granted, stop the stream immediately as SpeechRecognition handles its own input
-        stream.getTracks().forEach(track => track.stop());
-      } catch (err) {
-        console.error('Microphone permission denied:', err);
-        const errorMsg = isInAppBrowser()
-          ? '⚠️ ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาตรวจสอบการตั้งค่าสิทธิ์ของแอปพลิเคชัน หรือเปิดผ่าน Browser หลัก (Chrome/Safari)'
-          : '⚠️ ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณากดที่ไอคอนรูปกุญแจ 🔒 ที่แถบ URL หรือเมนูการตั้งค่าเว็บไซต์ แล้วเลือก "อนุญาต" (Allow) การใช้ไมโครโฟน';
-        setError(errorMsg);
-        return;
+    // For In-App Browsers (Line, FB), we MUST request microphone permission explicitly via getUserMedia first.
+    // This forces the OS/Browser to pop up the permission dialog.
+    if (isInAppBrowser()) {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          // Permission granted! Stop the stream immediately, we just needed the permission.
+          stream.getTracks().forEach(track => track.stop());
+        } catch (err) {
+          console.error('Microphone permission denied:', err);
+          setError('⚠️ ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาตรวจสอบการตั้งค่าแอปพลิเคชัน (LINE/Facebook) ให้ "อนุญาต" การใช้ไมโครโฟน หรือเปิดลิงก์นี้ผ่าน Browser หลัก (Chrome/Safari)');
+          return;
+        }
+      } else {
+         // Older Webview might not support getUserMedia but supports SpeechRecognition (rare)
+         // or simply doesn't support it at all.
+         setError('⚠️ เบราว์เซอร์ในแอปนี้อาจมีปัญหากับไมโครโฟน กรุณาเปิดผ่าน Chrome หรือ Safari');
+         return;
       }
+    } else {
+       // Standard browser: we can also try to request permission to be safe,
+       // but usually SpeechRecognition handles it.
+       // However, for consistency and to prevent "Not Allowed" errors later:
+       try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+       } catch (err) {
+          setError('⚠️ กรุณาอนุญาตการใช้ไมโครโฟนที่แถบ URL (ไอคอนกุญแจ 🔒)');
+          return;
+       }
     }
 
     const recognition = new SpeechRecognition();
@@ -207,9 +221,10 @@ export const SymptomAnalyzer: React.FC = () => {
       setDailyUsage(newCount);
       localStorage.setItem('shc_usage_count', newCount.toString());
 
-      const newTotal = totalUsage + 1;
-      setTotalUsage(newTotal);
-      localStorage.setItem('shc_total_usage', newTotal.toString());
+      // Notify parent
+      if (onAnalysisSuccess) {
+        onAnalysisSuccess();
+      }
 
     } catch (err) {
       console.error(err);
@@ -246,8 +261,8 @@ export const SymptomAnalyzer: React.FC = () => {
                 <h3 className="text-xl font-bold text-slate-800">วิเคราะห์อาการป่วยเบื้องต้น (SHC)</h3>
                 </div>
             </div>
-            <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
-                โควต้าวันนี้: {dailyUsage}/{MAX_DAILY_LIMIT} <span className="hidden sm:inline">(รวม {totalUsage} ครั้ง)</span>
+            <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md text-right">
+                <div className="font-semibold">โควต้าวันนี้: {dailyUsage}/{MAX_DAILY_LIMIT}</div>
             </div>
           </div>
           <p className="text-slate-600 mb-5 text-sm">
