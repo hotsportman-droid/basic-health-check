@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { HealthCheckItem } from './types';
 import { HeartIcon, LungIcon, MouthIcon, SkinIcon, BloodDropIcon, PressureIcon } from './components/icons';
@@ -5,7 +6,7 @@ import { HeartIcon, LungIcon, MouthIcon, SkinIcon, BloodDropIcon, PressureIcon }
 export const HEALTH_CHECKS: HealthCheckItem[] = [
   {
     icon: React.createElement(HeartIcon),
-    title: 'การวัดชีพจร (Pulse Rate)',
+    title: 'การวัดชีพจร',
     description: 'การวัดอัตราการเต้นของหัวใจ ช่วยบ่งชี้ความสมบูรณ์ของระบบหัวใจและหลอดเลือด',
     steps: [
       'ใช้นิ้วชี้และนิ้วกลางวางที่ข้อมือด้านใน หรือข้างลำคอ',
@@ -16,7 +17,7 @@ export const HEALTH_CHECKS: HealthCheckItem[] = [
   },
   {
     icon: React.createElement(LungIcon),
-    title: 'การสังเกตการหายใจ (Respiration)',
+    title: 'การสังเกตการหายใจ',
     description: 'อัตราการหายใจที่ผิดปกติ อาจเป็นสัญญาณของโรคระบบทางเดินหายใจหรือหัวใจ',
     steps: [
       'นั่งพักในท่าสบายๆ',
@@ -27,7 +28,7 @@ export const HEALTH_CHECKS: HealthCheckItem[] = [
   },
   {
     icon: React.createElement(PressureIcon),
-    title: 'การวัดความดันโลหิต (Blood Pressure)',
+    title: 'การวัดความดันโลหิต',
     description: 'การวัดความดันโลหิตเป็นประจำช่วยในการเฝ้าระวังโรคความดันโลหิตสูง ซึ่งเป็นปัจจัยเสี่ยงของโรคหัวใจและหลอดเลือด',
     steps: [
       'นั่งพักในท่าที่สบาย อย่างน้อย 5 นาที',
@@ -40,7 +41,7 @@ export const HEALTH_CHECKS: HealthCheckItem[] = [
   },
   {
     icon: React.createElement(BloodDropIcon),
-    title: 'การตรวจระดับน้ำตาลในเลือด (Blood Sugar)',
+    title: 'การตรวจระดับน้ำตาลในเลือด',
     description: 'การตรวจระดับน้ำตาลในเลือดด้วยตนเอง ช่วยในการติดตามและควบคุมภาวะเบาหวานหรือความเสี่ยง',
     steps: [
       'ล้างมือให้สะอาดและเช็ดให้แห้ง',
@@ -53,7 +54,7 @@ export const HEALTH_CHECKS: HealthCheckItem[] = [
   },
   {
     icon: React.createElement(SkinIcon),
-    title: 'การตรวจสุขภาพผิวหนัง (Skin Check)',
+    title: 'การตรวจสุขภาพผิวหนัง',
     description: 'การตรวจหาความผิดปกติของไฝหรือปาน ซึ่งอาจเป็นสัญญาณเริ่มต้นของมะเร็งผิวหนัง',
     steps: [
       'สำรวจผิวหนังทั่วร่างกายในที่ที่มีแสงสว่างเพียงพอ',
@@ -67,7 +68,7 @@ export const HEALTH_CHECKS: HealthCheckItem[] = [
   },
   {
     icon: React.createElement(MouthIcon),
-    title: 'การตรวจสุขภาพช่องปาก (Oral Health)',
+    title: 'การตรวจสุขภาพช่องปาก',
     description: 'สุขภาพช่องปากที่ดีสัมพันธ์กับสุขภาพโดยรวม และช่วยป้องกันโรคต่างๆ',
     steps: [
       'ใช้กระจกส่องดูในช่องปาก',

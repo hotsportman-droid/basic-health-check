@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { BrainIcon, MicIcon, SpeakerWaveIcon, StopIcon } from './icons';
 import { Modal } from './Modal';
 import { AdBanner } from './AdBanner';
+import { GoogleGenAI } from '@google/genai';
 
-const MAX_DAILY_LIMIT = 5;
+const MAX_DAILY_LIMIT = 10; // เพิ่มโควต้าต่อวันให้มากขึ้นเล็กน้อย
 
 interface SymptomAnalyzerProps {
   onAnalysisSuccess?: () => void;
@@ -13,6 +15,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
   const [symptoms, setSymptoms] = useState('');
   const [result, setResult] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState('กำลังประมวลผลข้อมูล...');
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [dailyUsage, setDailyUsage] = useState(0);
@@ -70,29 +73,22 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     
     setError(null);
 
-    // For In-App Browsers (Line, FB), we MUST request microphone permission explicitly via getUserMedia first.
-    // This forces the OS/Browser to pop up the permission dialog.
+    // For In-App Browsers (Line, FB)
     if (isInAppBrowser()) {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          // Permission granted! Stop the stream immediately, we just needed the permission.
           stream.getTracks().forEach(track => track.stop());
         } catch (err) {
           console.error('Microphone permission denied:', err);
-          setError('⚠️ ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาตรวจสอบการตั้งค่าแอปพลิเคชัน (LINE/Facebook) ให้ "อนุญาต" การใช้ไมโครโฟน หรือเปิดลิงก์นี้ผ่าน Browser หลัก (Chrome/Safari)');
+          setError('⚠️ ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาตรวจสอบการตั้งค่าแอปพลิเคชัน หรือเปิดลิงก์นี้ผ่าน Browser หลัก (Chrome/Safari)');
           return;
         }
       } else {
-         // Older Webview might not support getUserMedia but supports SpeechRecognition (rare)
-         // or simply doesn't support it at all.
          setError('⚠️ เบราว์เซอร์ในแอปนี้อาจมีปัญหากับไมโครโฟน กรุณาเปิดผ่าน Chrome หรือ Safari');
          return;
       }
     } else {
-       // Standard browser: we can also try to request permission to be safe,
-       // but usually SpeechRecognition handles it.
-       // However, for consistency and to prevent "Not Allowed" errors later:
        try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           stream.getTracks().forEach(track => track.stop());
@@ -155,16 +151,17 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     } else {
-      // Remove markdown symbols for better speech
-      const cleanText = result.replace(/[#*]/g, '');
-      
+      // Clean text for better speech synthesis
+      const cleanText = result
+        .replace(/[#*]/g, '')
+        .replace(/<\/?[^>]+(>|$)/g, "")
+        .replace(/&nbsp;/g, ' ');
+        
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = 'th-TH';
+      utterance.rate = 0.9; // Slightly slower for clarity
       
-      utterance.onend = () => {
-        setIsSpeaking(false);
-      };
-      
+      utterance.onend = () => setIsSpeaking(false);
       utterance.onerror = (e) => {
         console.error('Speech synthesis error', e);
         setIsSpeaking(false);
@@ -172,6 +169,27 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
 
       window.speechSynthesis.speak(utterance);
       setIsSpeaking(true);
+    }
+  };
+
+  // ฟังก์ชันช่วย Retry (ลองใหม่) เมื่อเจอ Error
+  const generateContentWithRetry = async (ai: GoogleGenAI, params: any, maxRetries = 3) => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await ai.models.generateContent(params);
+      } catch (error: any) {
+        const isRateLimit = error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('503');
+        
+        if (isRateLimit && i < maxRetries - 1) {
+          // คำนวณเวลาถอยหลัง: 1.5s, 3s, 6s... (Exponential Backoff)
+          const waitTime = 1500 * Math.pow(2, i);
+          setLoadingStatus(`ระบบกำลังหนาแน่น... กำลังเข้าคิวและลองใหม่ (ครั้งที่ ${i + 1})`);
+          console.log(`Rate limit hit. Retrying in ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        throw error;
+      }
     }
   };
 
@@ -190,48 +208,64 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     
     setIsModalOpen(false);
     setIsLoading(true);
+    setLoadingStatus('กำลังประมวลผลข้อมูล (AI กำลังคิด)...');
     setError(null);
     setResult('');
-    // Stop speaking if analyzing new text
+    
     if (isSpeaking) {
         window.speechSynthesis.cancel();
         setIsSpeaking(false);
     }
 
     try {
-      // Call our secure backend function (Groq)
-      const response = await fetch('/api/analyze-symptoms', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ symptoms }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'เกิดข้อผิดพลาดในการสื่อสารกับเซิร์ฟเวอร์');
-      }
+      // Initialize Gemini Client Side
+      // ใช้ Environment variable API_KEY เท่านั้น
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      setResult(data.analysis);
+      const params = {
+        model: 'gemini-2.5-flash',
+        contents: symptoms,
+        config: {
+            systemInstruction: 'คุณคือผู้ช่วยอัจฉริยะด้านสุขภาพ (AI Doctor) หน้าที่ของคุณคือวิเคราะห์อาการป่วยเบื้องต้นจากข้อมูลที่ได้รับ และให้คำแนะนำที่เป็นประโยชน์ด้วย "ภาษาไทย" เท่านั้น!\n\nกฎเหล็ก:\n1. ห้ามตอบเป็นภาษาอังกฤษเด็ดขาด ยกเว้นชื่อเฉพาะทางการแพทย์\n2. คำตอบต้องไม่ใช่การวินิจฉัยทางการแพทย์ และต้องมีข้อความเตือนให้ไปพบแพทย์เสมอ\n3. แบ่งคำตอบเป็น 3 ส่วนชัดเจน: สาเหตุที่เป็นไปได้, การดูแลตนเอง, อาการที่ต้องรีบพบแพทย์\n4. ใช้ภาษาที่เข้าใจง่าย เป็นกันเอง เหมือนหมอใจดี',
+            temperature: 0.4,
+            topK: 40,
+            topP: 0.95,
+        }
+      };
+
+      // เรียกใช้ฟังก์ชัน Retry Wrapper
+      const response = await generateContentWithRetry(ai, params);
+
+      if (!response || !response.text) {
+         throw new Error('ไม่ได้รับข้อมูลการวิเคราะห์จากระบบ');
+      }
+
+      setResult(response.text);
 
       // Increment usage count on success
       const newCount = dailyUsage + 1;
       setDailyUsage(newCount);
       localStorage.setItem('shc_usage_count', newCount.toString());
 
-      // Notify parent
       if (onAnalysisSuccess) {
         onAnalysisSuccess();
       }
 
-    } catch (err) {
-      console.error(err);
-      const errorMessage = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการวิเคราะห์ โปรดลองอีกครั้ง';
+    } catch (err: any) {
+      console.error("Gemini Error:", err);
+      let errorMessage = 'เกิดข้อผิดพลาดในการเชื่อมต่อกับระบบวิเคราะห์ AI';
+      
+      // Handle Rate Limit / Quota issues specifically
+      if (err.message?.includes('429') || err.message?.includes('quota')) {
+          errorMessage = 'ขณะนี้ระบบมีการใช้งานหนาแน่นมาก (ผู้ใช้งานเกิน 100,000 คน) กรุณารอสักครู่แล้วลองใหม่ในภายหลัง';
+      } else if (err.message?.includes('API key')) {
+          errorMessage = 'เกิดปัญหาเรื่องกุญแจการเข้าถึง (API Key Invalid) กรุณาตรวจสอบการตั้งค่า';
+      }
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
+      setLoadingStatus('กำลังประมวลผลข้อมูล...');
     }
   };
   
@@ -248,43 +282,52 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     setIsModalOpen(true);
   }
 
+  // Simple HTML cleanup for display if raw text comes back not perfectly formatted
+  const formatResult = (text: string) => {
+    // Check if it looks like HTML already
+    if (text.includes('<h3>') || text.includes('<ul>')) {
+        return text;
+    }
+    // Fallback formatter for Markdown-like text
+    return text
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^\* (.*$)/gim, '<li>$1</li>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br />');
+  };
+
   return (
     <>
-      <div className="bg-white rounded-xl shadow-lg border border-slate-200/80 overflow-hidden flex flex-col h-full">
+      <div className="bg-white rounded-xl shadow-lg border border-slate-200/80 overflow-hidden flex flex-col h-full relative">
         <div className="p-6 flex-grow flex flex-col">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 pr-8">
             <div className="flex items-center">
                 <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mr-4 shrink-0">
                 <BrainIcon />
                 </div>
                 <div>
-                <h3 className="text-xl font-bold text-slate-800">วิเคราะห์อาการป่วยเบื้องต้น (SHC)</h3>
+                <h3 className="text-xl font-bold text-slate-800">วิเคราะห์อาการป่วย (AI)</h3>
                 </div>
             </div>
-            <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md text-right">
-                <div className="font-semibold">โควต้าวันนี้: {dailyUsage}/{MAX_DAILY_LIMIT}</div>
-            </div>
           </div>
+          <div className="flex justify-end mb-2">
+              <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                  โควต้าวันนี้: {dailyUsage}/{MAX_DAILY_LIMIT}
+              </div>
+          </div>
+
           <p className="text-slate-600 mb-5 text-sm">
-            ป้อนอาการของคุณเพื่อรับการวิเคราะห์เบื้องต้นเกี่ยวกับสาเหตุที่เป็นไปได้
+            ป้อนอาการของคุณเพื่อรับการวิเคราะห์เบื้องต้นด้วย AI (Gemini Flash)
             <strong className="text-red-600 block mt-1">
-              เครื่องมือนี้ไม่ใช่การวินิจฉัยทางการแพทย์ โปรดปรึกษาแพทย์
+              เครื่องมือนี้ไม่ใช่การวินิจฉัยทางการแพทย์
             </strong>
           </p>
 
           <div className="space-y-4 flex-grow flex flex-col">
             <div className="flex-grow relative">
               <label htmlFor="symptoms" className="block text-sm font-medium text-slate-700 mb-2">
-                อาการของคุณ (เช่น ปวดหัว, มีไข้, ไอ)
+                อาการของคุณ
               </label>
-              <div className="mb-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-800">
-                <p className="font-semibold mb-2">ข้อแนะนำในการบอกอาการ:</p>
-                <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li><span className="font-semibold">อาการหลัก:</span> เป็นอะไร, ตรงไหน, รุนแรงแค่ไหน</li>
-                  <li><span className="font-semibold">ระยะเวลา:</span> เริ่มเป็นเมื่อไหร่, เป็นมานานเท่าไหร่</li>
-                  <li><span className="font-semibold">อาการร่วม:</span> มีอาการอื่นร่วมด้วยหรือไม่</li>
-                </ul>
-              </div>
               <div className="relative">
                 <textarea
                   id="symptoms"
@@ -292,8 +335,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
                   value={symptoms}
                   onChange={(e) => setSymptoms(e.target.value)}
                   className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm pr-12"
-                  placeholder="ตัวอย่าง: ปวดหัวข้างขวาแบบตุบๆ มา 2 วันแล้ว มีอาการคลื่นไส้ร่วมด้วย... (กดไอคอนไมค์เพื่อพูดได้)"
-                  aria-label="Symptom input"
+                  placeholder="ตัวอย่าง: ปวดหัวข้างขวาแบบตุบๆ มา 2 วันแล้ว มีอาการคลื่นไส้ร่วมด้วย..."
                 />
                 <button
                   onClick={toggleListening}
@@ -318,8 +360,9 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
           </div>
 
           {error && (
-            <div className="mt-6 text-center bg-red-50 text-red-700 p-4 rounded-lg whitespace-pre-line">
-              <p>{error}</p>
+            <div className="mt-6 text-center bg-red-50 text-red-700 p-4 rounded-lg whitespace-pre-line border border-red-100 animate-fade-in">
+              <p className="font-semibold mb-1">เกิดข้อผิดพลาด</p>
+              <p className="text-sm">{error}</p>
             </div>
           )}
 
@@ -327,13 +370,13 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
               <div className="mt-6 text-center" aria-live="polite">
                   <div className="flex justify-center items-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-                      <p className="ml-3 text-slate-600">กำลังประมวลผลข้อมูล...</p>
+                      <p className="ml-3 text-slate-600 text-sm animate-pulse">{loadingStatus}</p>
                   </div>
               </div>
           )}
 
           {result && !isLoading && (
-            <div className="mt-6 bg-slate-50 p-4 rounded-lg border border-slate-200 relative" aria-live="polite">
+            <div className="mt-6 bg-slate-50 p-4 rounded-lg border border-slate-200 relative animate-fade-in" aria-live="polite">
               <div className="flex justify-between items-start mb-2">
                 <h4 className="font-bold text-slate-800">ผลการวิเคราะห์เบื้องต้น:</h4>
                 <button 
@@ -353,7 +396,9 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
                   )}
                 </button>
               </div>
-              <div className="prose prose-sm max-w-none text-slate-700 pr-2" dangerouslySetInnerHTML={{ __html: result.replace(/###/g, '<h3>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}></div>
+              <div className="prose prose-sm max-w-none text-slate-700 pr-2 space-y-2">
+                  <div dangerouslySetInnerHTML={{ __html: formatResult(result) }} />
+              </div>
               <div className="mt-4 p-3 bg-red-100 border-l-4 border-red-500 text-red-700 text-sm">
                 <p className="font-bold">ข้อควรจำที่สำคัญ:</p>
                 <p>ผลลัพธ์นี้เป็นเพียงข้อมูลเบื้องต้นเท่านั้น ไม่สามารถใช้แทนการวินิจฉัยจากแพทย์ได้</p>
@@ -371,7 +416,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
         <div className="text-center">
             <h3 className="text-lg font-bold text-slate-800">ยืนยันการวิเคราะห์อาการ</h3>
             <p className="text-sm text-slate-600 mt-2">
-                ผลลัพธ์จากการวิเคราะห์โดย SHC เป็นเพียงข้อมูลเบื้องต้นเพื่อการศึกษาเท่านั้น
+                ผลลัพธ์จากการวิเคราะห์โดย AI เป็นเพียงข้อมูลเบื้องต้นเพื่อการศึกษาเท่านั้น
                 และไม่สามารถใช้แทนการวินิจฉัยจากแพทย์ได้
             </p>
             <div className="mt-6 flex justify-center gap-4">

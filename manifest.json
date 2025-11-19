@@ -1,7 +1,7 @@
 {
-  "name": "Self Health Check Guide",
-  "short_name": "Health Check",
-  "description": "An application that provides basic knowledge for performing self-health check-ups at home.",
+  "name": "คู่มือตรวจสุขภาพด้วยตนเอง",
+  "short_name": "ตรวจสุขภาพ",
+  "description": "แอปพลิเคชันที่ให้ความรู้พื้นฐานสำหรับการตรวจสุขภาพด้วยตนเองที่บ้าน",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#f8fafc",

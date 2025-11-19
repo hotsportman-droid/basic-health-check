@@ -1,5 +1,5 @@
 {
-  "name": "self-health-check-guide",
+  "name": "คู่มือตรวจสุขภาพด้วยตนเอง",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "@google/genai": "^1.30.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

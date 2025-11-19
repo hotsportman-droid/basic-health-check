@@ -1,6 +1,6 @@
 {
-  "name": "Self Health Check Guide",
-  "description": "An application that provides basic knowledge for performing self-health check-ups at home, covering topics like measuring pulse, BMI calculation, and skin checks. The content is presented in Thai.",
+  "name": "คู่มือตรวจสุขภาพด้วยตนเอง",
+  "description": "แอปพลิเคชันที่ให้ความรู้พื้นฐานสำหรับการตรวจสุขภาพด้วยตนเองที่บ้าน ครอบคลุมหัวข้อต่างๆ เช่น การวัดชีพจร การคำนวณ BMI และการตรวจผิวหนัง",
   "requestFramePermissions": [
     "geolocation",
     "microphone"

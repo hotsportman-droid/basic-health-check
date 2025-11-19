@@ -1,126 +1,17 @@
+
 import React, { useState } from 'react';
 import { MapPinIcon, NhsoIcon, ChevronRightIcon } from './icons';
 import { Modal } from './Modal';
 import { AdBanner } from './AdBanner';
 
 export const NearbyHospitals: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isNhsoModalOpen, setIsNhsoModalOpen] = useState(false);
   const [isServiceFinderModalOpen, setIsServiceFinderModalOpen] = useState(false);
 
   const handleFindHospitals = () => {
-    setIsLoading(true);
-    setError(null);
-
-    // Check if the user is on a mobile device
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    // Mobile: Open Google Maps App immediately without waiting for browser geolocation
-    // relying on the app to handle "near me" location finding.
-    if (isMobile) {
-      const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา ใกล้ฉัน");
-      const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
-      window.location.href = url;
-      setIsLoading(false);
-      return;
-    }
-
-    // Desktop: Open window immediately to bypass popup blockers
-    let newWindow: Window | null = window.open('', '_blank');
-
-    if (!newWindow) {
-        setIsLoading(false);
-        setError('Pop-up ถูกบล็อก กรุณาอนุญาตให้เปิดหน้าต่างใหม่');
-        return;
-    }
-
-    // Show loading state in the new window while fetching location
-    newWindow.document.write(`
-    <!DOCTYPE html>
-    <html lang="th">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>กำลังค้นหา...</title>
-        <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f8fafc;
-            color: #334155;
-        }
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #e2e8f0;
-            border-top: 5px solid #4f46e5;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        h2 { margin: 0 0 10px 0; font-size: 18px; }
-        p { margin: 0; color: #64748b; font-size: 14px; }
-        </style>
-    </head>
-    <body>
-        <div class="spinner"></div>
-        <h2>กำลังระบุตำแหน่งของคุณ</h2>
-        <p>เพื่อค้นหาสถานพยาบาลที่ใกล้ที่สุด...</p>
-    </body>
-    </html>
-    `);
-    newWindow.document.close();
-
-    const fallbackToGeneralSearch = () => {
-       const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา ใกล้ฉัน");
-       const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
-       
-       if (newWindow) {
-           newWindow.location.href = url;
-       }
-       setIsLoading(false);
-    };
-
-    if (!navigator.geolocation) {
-      fallbackToGeneralSearch();
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        
-        // Use Google Maps Universal URL structure
-        const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา");
-        const url = `https://www.google.com/maps/search/?api=1&query=${query}&center=${latitude},${longitude}`;
-        
-        if (newWindow) {
-            newWindow.location.href = url;
-        }
-        
-        setIsLoading(false);
-      },
-      (err) => {
-        // Fallback to general search instead of closing
-        console.warn('Geolocation error, falling back to general search:', err);
-        fallbackToGeneralSearch();
-      },
-      { 
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0 
-      }
-    );
+    const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา ใกล้ฉัน");
+    const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+    window.open(url, '_blank');
   };
 
   const handleNhsoRightsCheck = () => {
@@ -181,18 +72,11 @@ export const NearbyHospitals: React.FC = () => {
           <div className="mt-auto pt-4">
             <button
               onClick={handleFindHospitals}
-              disabled={isLoading}
-              className="w-full bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
+              className="w-full bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
             >
-              {isLoading ? 'กำลังค้นหา...' : 'เปิด Google Maps เพื่อค้นหา'}
+              เปิด Google Maps เพื่อค้นหา
             </button>
           </div>
-
-          {error && (
-            <div className="mt-4 text-center bg-red-50 text-red-700 p-3 rounded-lg text-sm">
-              <p>{error}</p>
-            </div>
-          )}
         </div>
       </div>
 

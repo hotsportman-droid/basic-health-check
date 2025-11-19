@@ -43,7 +43,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, adSlot 
           <button
             onClick={onClose}
             className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-            aria-label="Close modal"
+            aria-label="ปิดหน้าต่าง"
           >
             <XIcon className="w-6 h-6" />
           </button>
