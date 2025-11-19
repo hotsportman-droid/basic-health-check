@@ -10,15 +10,10 @@ export const NearbyHospitals: React.FC = () => {
   const [isServiceFinderModalOpen, setIsServiceFinderModalOpen] = useState(false);
 
   const handleFindHospitals = () => {
-    if (!navigator.geolocation) {
-      setError('เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง');
-      return;
-    }
-    
     setIsLoading(true);
     setError(null);
 
-    // 1. Open window immediately (bypass popup blocker)
+    // 1. Open window immediately to bypass popup blockers
     const newWindow = window.open('', '_blank');
 
     if (!newWindow) {
@@ -27,16 +22,71 @@ export const NearbyHospitals: React.FC = () => {
         return;
     }
 
-    // Optional: Show loading text in new window
-    newWindow.document.write('<html><body style="font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;">กำลังค้นหาตำแหน่งและเปิดแผนที่...</body></html>');
+    // Show loading state in the new window while fetching location
+    newWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="th">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>กำลังค้นหา...</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f8fafc;
+            color: #334155;
+          }
+          .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #e2e8f0;
+            border-top: 5px solid #4f46e5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          h2 { margin: 0 0 10px 0; font-size: 18px; }
+          p { margin: 0; color: #64748b; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="spinner"></div>
+        <h2>กำลังระบุตำแหน่งของคุณ</h2>
+        <p>เพื่อค้นหาสถานพยาบาลที่ใกล้ที่สุด...</p>
+      </body>
+      </html>
+    `);
+    newWindow.document.close();
+
+    const fallbackToGeneralSearch = () => {
+       const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา ใกล้ฉัน");
+       const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+       newWindow.location.href = url;
+       setIsLoading(false);
+    };
+
+    if (!navigator.geolocation) {
+      fallbackToGeneralSearch();
+      return;
+    }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         
-        // Construct the Google Maps search URL directly with "ใกล้ฉัน" (near me) for better accuracy
-        const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา ใกล้ฉัน");
-        const url = `https://www.google.com/maps/search/${query}/@${latitude},${longitude},11z`;
+        // Use Google Maps Universal URL structure
+        const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา");
+        const url = `https://www.google.com/maps/search/?api=1&query=${query}&center=${latitude},${longitude}`;
         
         // 2. Redirect the pre-opened window to Google Maps
         newWindow.location.href = url;
@@ -44,28 +94,13 @@ export const NearbyHospitals: React.FC = () => {
         setIsLoading(false);
       },
       (err) => {
-        // 3. Close window if failed
-        newWindow.close();
-
-        switch (err.code) {
-          case err.PERMISSION_DENIED:
-            setError('คุณปฏิเสธการเข้าถึงตำแหน่ง');
-            break;
-          case err.POSITION_UNAVAILABLE:
-            setError('ข้อมูลตำแหน่งไม่พร้อมใช้งาน');
-            break;
-          case err.TIMEOUT:
-            setError('หมดเวลาในการค้นหาตำแหน่ง (กรุณาลองใหม่ในที่โล่ง)');
-            break;
-          default:
-            setError('เกิดข้อผิดพลาดในการระบุตำแหน่ง');
-            break;
-        }
-        setIsLoading(false);
+        // 3. Fallback to general search instead of closing
+        console.warn('Geolocation error, falling back to general search:', err);
+        fallbackToGeneralSearch();
       },
       { 
-        enableHighAccuracy: true, // Try to get best possible location
-        timeout: 30000,           // Increase timeout to 30 seconds
+        enableHighAccuracy: true,
+        timeout: 10000, // Reduced timeout
         maximumAge: 0 
       }
     );
