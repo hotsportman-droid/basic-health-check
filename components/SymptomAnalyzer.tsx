@@ -247,12 +247,30 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     recognition.onend = () => setIsListening(false);
     
     recognition.onerror = (event: any) => {
-      let msg = 'เกิดข้อผิดพลาดในการรับเสียง';
-      if (event.error === 'not-allowed') msg = 'กรุณาอนุญาตให้ใช้ไมโครโฟน';
-      if (event.error === 'no-speech') msg = 'ไม่ได้ยินเสียงพูด ลองใหม่อีกครั้งนะครับ';
+      console.error("Speech Error:", event.error);
+      let msg = 'เกิดปัญหาไมโครโฟนครับ';
+
+      if (event.error === 'not-allowed') {
+          msg = 'กรุณากด "อนุญาต" ให้ใช้ไมโครโฟนที่แถบด้านบน หรือในการตั้งค่าของเบราว์เซอร์ก่อนนะครับ';
+      } else if (event.error === 'service-not-allowed') {
+          msg = 'เบราว์เซอร์นี้ไม่อนุญาตให้ใช้ระบบเสียงครับ ลองเปลี่ยนไปใช้ Chrome หรือ Safari นะครับ';
+      } else if (event.error === 'no-speech') {
+          msg = 'หมอไม่ได้ยินเสียงเลยครับ ลองพูดเสียงดังขึ้นอีกนิดนะครับ';
+      } else if (event.error === 'network') {
+          msg = 'สัญญาณอินเทอร์เน็ตไม่ดี ทำให้รับเสียงไม่ได้ครับ';
+      } else if (event.error === 'audio-capture') {
+          msg = 'ไม่พบไมโครโฟนครับ ตรวจสอบการเชื่อมต่ออุปกรณ์นะครับ';
+      } else if (event.error === 'language-not-supported') {
+          msg = 'เครื่องนี้อาจไม่รองรับการพิมพ์ด้วยเสียงภาษาไทยครับ';
+      } else if (event.error !== 'aborted') {
+          msg = `ระบบรับเสียงขัดข้อง (${event.error}) รบกวนคนไข้พิมพ์อาการแทนนะครับ`;
+      }
       
-      setError(msg);
-      speak(msg);
+      // If aborted (manual stop), don't show error
+      if (event.error !== 'aborted') {
+        setError(msg);
+        speak(msg);
+      }
       setIsListening(false);
     };
 
@@ -262,7 +280,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
         const newVal = prev + (prev ? ' ' : '') + transcript;
         return newVal;
       });
-      speak("ได้รับข้อมูลแล้วครับ หากมีเพิ่ม ให้กดพูดต่อ หรือกดปุ่มวิเคราะห์ได้เลย");
+      speak("ได้รับข้อมูลแล้วครับ พูดต่อได้ หรือกดวิเคราะห์ได้เลยครับ");
     };
 
     recognitionRef.current = recognition;
@@ -270,7 +288,7 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
         recognition.start();
     } catch (e) {
         console.error(e);
-        setError("ไม่สามารถเริ่มไมโครโฟนได้");
+        setError("ไม่สามารถเริ่มไมโครโฟนได้ ลองรีเฟรชหน้าจอใหม่นะครับ");
     }
   };
 
