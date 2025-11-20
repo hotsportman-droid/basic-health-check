@@ -4,13 +4,13 @@ import { HealthCheckCard } from './components/HealthCheckCard';
 import { BMICalculator } from './components/BMICalculator';
 import { NearbyHospitals } from './components/NearbyHospitals';
 import { HEALTH_CHECKS } from './constants';
-import { StethoscopeIcon, ShareIcon, ShareIcon as ShareIconSmall, QrCodeIcon } from './components/icons';
+import { StethoscopeIcon, ShareIcon, QrCodeIcon } from './components/icons';
 import { ShareModal } from './components/ShareModal';
 import { Modal } from './components/Modal';
 import { DrRakAvatar } from './components/DrRakAvatar';
 import { QRCodeModal } from './components/QRCodeModal';
 
-// Simulated base count (Updated to 450)
+// Simulated base count (Started at 450)
 const BASE_FRIEND_COUNT = 450;
 
 const App: React.FC = () => {
@@ -39,29 +39,29 @@ const App: React.FC = () => {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
-    // Friend Counting Logic: Add +1 only on first visit for this device
-    // Updated keys to 'v2' to reset count for existing users to the new base of 450
+    // Friend Counting Logic:
+    // "เมื่อเครื่องนั้นเข้าใช้ครั้งแรก ให้ บวก 1 เสมอ"
+    // Interpretation: The visible count is the Base Count + 1 (The current user).
+    // This allows the "accumulation" to be controlled by the Base Count growing over time,
+    // while ensuring the user always feels counted as "+1".
+    
     const handleFriendCount = () => {
       try {
-        const isFriend = localStorage.getItem('dr_rak_is_friend_v2');
-        const storedCount = localStorage.getItem('dr_rak_friend_count_v2');
+        // We check localStorage to simulate the "First Time" registration event
+        // Key updated to 'v3' to ensure fresh logic applies to all devices
+        const isFriend = localStorage.getItem('dr_rak_is_friend_v3');
 
-        if (isFriend && storedCount) {
-            // User is already a friend, show their stored count
-            const count = Math.max(parseInt(storedCount), BASE_FRIEND_COUNT);
-            setTotalFriends(count);
-        } else {
-            // First time visiting this device (or after reset)
-            const newFriendCount = BASE_FRIEND_COUNT + 1;
-            
-            localStorage.setItem('dr_rak_is_friend_v2', 'true');
-            localStorage.setItem('dr_rak_friend_count_v2', newFriendCount.toString());
-            
-            setTotalFriends(newFriendCount);
+        // Regardless of whether they were already a friend or not, 
+        // the logic "Always add 1 for this device" means we show Base + 1.
+        setTotalFriends(BASE_FRIEND_COUNT + 1);
+
+        if (!isFriend) {
+            // Mark this device as having joined the community
+            localStorage.setItem('dr_rak_is_friend_v3', 'true');
         }
       } catch (error) {
-        console.warn('LocalStorage access denied (likely Safari Private Mode):', error);
-        // Fallback: just show Base + 1
+        console.warn('LocalStorage access denied:', error);
+        // Fallback: Still show Base + 1
         setTotalFriends(BASE_FRIEND_COUNT + 1);
       }
     };
@@ -70,7 +70,6 @@ const App: React.FC = () => {
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      // We are not using the install prompt in UI anymore, but keeping the listener prevents automatic browser prompt
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -266,7 +265,7 @@ const App: React.FC = () => {
              
              {isIOS ? (
                  <div className="space-y-4 text-left text-slate-600 text-sm">
-                     <p>1. แตะที่ปุ่ม <strong>แชร์</strong> <span className="inline-block"><ShareIconSmall className="w-4 h-4 inline text-blue-500"/></span> ที่แถบด้านล่างของ Safari</p>
+                     <p>1. แตะที่ปุ่ม <strong>แชร์</strong> <span className="inline-block"><ShareIcon className="w-4 h-4 inline text-blue-500"/></span> ที่แถบด้านล่างของ Safari</p>
                      <p>2. เลื่อนลงมาและเลือก <strong>"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen)</strong></p>
                      <p>3. กดปุ่ม <strong>"เพิ่ม" (Add)</strong> ที่มุมขวาบน</p>
                  </div>
