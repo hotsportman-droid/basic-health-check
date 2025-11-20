@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "echo 'Run locally'",
-    "build": "echo 'Build step'",
+    "build": "mkdir dist && cp -r components dist/ && cp index.html index.tsx App.tsx metadata.json constants.ts types.ts vite.svg manifest.json sw.js firebase.ts vercel.json dist/",
     "start": "echo 'Start step'"
   },
   "dependencies": {
