@@ -51,7 +51,9 @@ export default async function handler(req: any, res: any) {
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: prompt,
+        // FIX: Use a structured contents object to ensure compatibility and stability,
+        // especially when a system instruction is present.
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: {
             systemInstruction: SYSTEM_INSTRUCTION,
         }
