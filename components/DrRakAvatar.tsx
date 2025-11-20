@@ -3,45 +3,6 @@ import { StethoscopeIcon, CheckCircleIcon, ExclamationIcon, SpeakerWaveIcon } fr
 import { GoogleGenAI } from "@google/genai";
 
 // --- UI HELPERS ---
-const DrRakImage = ({ isSpeaking }: { isSpeaking: boolean }) => (
-  <svg viewBox="0 0 400 400" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-     <defs>
-      <linearGradient id="bg-gradient" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor={isSpeaking ? '#a5b4fc' : '#E0E7FF'} />
-        <stop offset="100%" stopColor={isSpeaking ? '#818cf8' : '#C7D2FE'} />
-      </linearGradient>
-    </defs>
-    <circle cx="200" cy="200" r="195" fill="url(#bg-gradient)" stroke="#ffffff" strokeWidth="8" className="transition-all duration-300"/>
-    <g transform="translate(0, 10)">
-      <path d="M120 140 Q90 250 100 340 L300 340 Q310 250 280 140 Z" fill="#3E2723"/>
-      <path d="M80 420 L90 340 Q90 300 140 290 L260 290 Q310 300 310 340 L320 420 Z" fill="#FFFFFF"/>
-      <path d="M160 290 L200 340 L240 290 L240 310 Q200 350 160 310 Z" fill="#60A5FA"/>
-      <path d="M170 230 L170 300 Q200 315 230 300 L230 230 Z" fill="#FFF0E6"/>
-      <path d="M140 290 L200 370 L260 290 L280 330 L200 430 L120 330 Z" fill="#F1F5F9" stroke="#CBD5E1" strokeWidth="1"/>
-      <path d="M135 150 Q135 270 200 270 Q265 270 265 150 Q265 70 200 70 Q135 70 135 150" fill="#FFF0E6"/>
-      <circle cx="132" cy="190" r="10" fill="#EAC0B0"/>
-      <circle cx="268" cy="190" r="10" fill="#EAC0B0"/>
-      <path d="M200 60 Q110 60 110 190 C110 220 120 160 160 120 Q200 160 240 120 C280 160 290 220 290 190 Q290 60 200 60" fill="#3E2723"/>
-      <path d="M155 165 Q170 155 185 165" stroke="#3E2723" strokeWidth="3" fill="none" strokeLinecap="round"/>
-      <path d="M215 165 Q230 155 245 165" stroke="#3E2723" strokeWidth="3" fill="none" strokeLinecap="round"/>
-      <g fill="#2D2424">
-          <ellipse cx="170" cy="185" rx="11" ry="13" />
-          <ellipse cx="230" cy="185" rx="11" ry="13" />
-          <circle cx="173" cy="181" r="4" fill="white" opacity="0.9"/>
-          <circle cx="233" cy="181" r="4" fill="white" opacity="0.9"/>
-      </g>
-      <path d="M200 205 Q198 215 202 218" stroke="#D69E8E" strokeWidth="2" fill="none" strokeLinecap="round"/>
-      <path d="M185 240 Q200 250 215 240" stroke="#D84315" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      <path d="M150 310 C150 370 250 370 250 310" stroke="#475569" strokeWidth="5" fill="none" strokeLinecap="round"/>
-      <circle cx="200" cy="370" r="14" fill="#94A3B8" stroke="#334155" strokeWidth="2"/>
-      {/* Mouth animation */}
-      {isSpeaking && (
-        <ellipse cx="200" cy="250" rx="10" ry="5" fill="#D84315" opacity="0.6" className="animate-pulse" />
-      )}
-    </g>
-  </svg>
-);
-
 const MarkdownContent = ({ text }: { text: string }) => {
     if (!text || text === '-') return <p className="text-slate-400 italic">ไม่มีข้อมูล</p>;
     return (
@@ -189,21 +150,18 @@ export const DrRakAvatar: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 p-6 flex flex-col items-center text-center max-w-2xl mx-auto relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-400 via-blue-500 to-teal-400"></div>
             
-            <div className="flex flex-col md:flex-row items-start w-full gap-6">
-                {/* Left: Avatar */}
-                <div className="w-full md:w-1/3 flex flex-col items-center">
-                     <div className="relative w-32 h-32 mb-4">
-                        <DrRakImage isSpeaking={isSpeaking} />
-                        {isProcessing && (
-                            <div className="absolute inset-0 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin opacity-50"></div>
-                        )}
+            <div className="w-full">
+                {/* Header Section */}
+                <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3 text-indigo-600 shadow-sm">
+                        <StethoscopeIcon className="w-8 h-8" />
                     </div>
                     <h3 className="text-xl font-bold text-slate-800">ปรึกษาหมอรักษ์</h3>
-                    <p className="text-xs text-slate-500 mt-1">AI ผู้ช่วยดูแลสุขภาพเบื้องต้น</p>
+                    <p className="text-sm text-slate-500 mt-1">AI ผู้ช่วยดูแลสุขภาพเบื้องต้น</p>
                 </div>
 
-                {/* Right: Input & Action */}
-                <div className="w-full md:w-2/3 text-left space-y-4">
+                {/* Input & Action */}
+                <div className="text-left space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">
                             อาการของคุณเป็นอย่างไรบ้าง?
@@ -248,8 +206,7 @@ export const DrRakAvatar: React.FC = () => {
                 <div className="mt-8 w-full text-left animate-fade-in border-t border-slate-100 pt-6">
                     
                     {/* Speech Bubble with Manual Replay Button */}
-                    <div className="bg-indigo-50 p-4 rounded-2xl rounded-tl-none relative ml-8 mb-6 shadow-sm border border-indigo-100">
-                         <div className="absolute -left-2 top-0 w-4 h-4 bg-indigo-50 border-l border-t border-indigo-100 transform -rotate-45"></div>
+                    <div className="bg-indigo-50 p-4 rounded-2xl relative mb-6 shadow-sm border border-indigo-100">
                          <div className="flex items-start justify-between">
                             <div className="flex items-start pr-2">
                                 <div className="shrink-0 mr-3 mt-1">
