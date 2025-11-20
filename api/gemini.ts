@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
-// IMPORTANT: Set the API_KEY in your Vercel project's environment variables.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+// This is a Vercel serverless function (Node.js runtime).
+// It acts as a secure backend proxy to communicate with the Gemini API.
 
 const SYSTEM_INSTRUCTION = `คุณคือ "หมอรักษ์" AI ประจำบ้านผู้หญิงที่มีความเห็นอกเห็นใจและเป็นมิตร พูดคุยกับผู้ใช้ด้วยความเป็นห่วงเป็นใยและใช้ภาษาไทยที่เข้าใจง่ายสำหรับผู้สูงอายุ ลงท้ายประโยคด้วย "ค่ะ" เสมอ
 
@@ -25,15 +25,22 @@ const SYSTEM_INSTRUCTION = `คุณคือ "หมอรักษ์" AI ป
 - ในการสนทนาปกติ ห้ามใช้รูปแบบการวิเคราะห์หรือแท็ก <analysis> เด็ดขาด
 - เรียกผู้ใช้งานว่า "คนไข้" เมื่อทำการวิเคราะห์ และเรียก "คุณ" ในการสนทนาทั่วไป`;
 
-export async function POST(request: Request) {
+// The 'any' types are used here to avoid needing the @vercel/node dependency,
+// which is not available in this environment. Vercel will provide the correct
+// request and response objects at runtime.
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
   try {
-    const { prompt } = await request.json();
+    // IMPORTANT: API_KEY is securely sourced from Vercel's environment variables.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const { prompt } = req.body;
 
     if (!prompt) {
-      return new Response(JSON.stringify({ error: 'Prompt is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return res.status(400).json({ error: 'Prompt is required' });
     }
 
     const response = await ai.models.generateContent({
@@ -43,19 +50,14 @@ export async function POST(request: Request) {
             systemInstruction: SYSTEM_INSTRUCTION,
         }
     });
-
+    
     const responseText = response.text;
 
-    return new Response(JSON.stringify({ text: responseText }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(200).json({ text: responseText });
 
   } catch (error) {
     console.error('API Error:', error);
-    return new Response(JSON.stringify({ error: 'Failed to communicate with the AI model.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    // Provide a generic error to the client for security.
+    return res.status(500).json({ error: 'Failed to communicate with the AI model.' });
   }
 }
