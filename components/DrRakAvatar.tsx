@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MicIcon, StopIcon, StethoscopeIcon, CheckCircleIcon, ExclamationIcon } from './icons';
-import { GoogleGenAI } from '@google/genai';
 
 // Fix: Add missing type definitions for the Web Speech API to resolve compilation errors.
 interface SpeechRecognition extends EventTarget {
@@ -138,11 +137,10 @@ export const DrRakAvatar: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const recognitionRef = useRef<SpeechRecognition | null>(null);
-    const aiRef = useRef<GoogleGenAI | null>(null);
     const finalTranscriptRef = useRef('');
 
     const processRequest = async (text: string) => {
-        if (!aiRef.current || !text.trim()) {
+        if (!text.trim()) {
             setStatusText('ไม่ได้ยินเสียงพูดค่ะ ลองใหม่อีกครั้ง');
             return;
         };
@@ -150,35 +148,22 @@ export const DrRakAvatar: React.FC = () => {
         setStatusText('กำลังประมวลผล...');
 
         try {
-            const response = await aiRef.current.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: text,
-                config: {
-                    systemInstruction: `คุณคือ "หมอรักษ์" AI ประจำบ้านผู้หญิงที่มีความเห็นอกเห็นใจและเป็นมิตร พูดคุยกับผู้ใช้ด้วยความเป็นห่วงเป็นใยและใช้ภาษาไทยที่เข้าใจง่ายสำหรับผู้สูงอายุ ลงท้ายประโยคด้วย "ค่ะ" เสมอ
-
-หน้าที่ของคุณมี 2 อย่าง:
-1.  **การสนทนาทั่วไป:** ตอบคำถามสั้นๆ ให้กำลังใจ และสร้างความเป็นกันเอง
-2.  **การวิเคราะห์อาการ:** เมื่อผู้ใช้เริ่มเล่าอาการเจ็บป่วยอย่างชัดเจน ให้คุณเปลี่ยนไปทำหน้าที่วิเคราะห์อาการ และต้องตอบกลับในรูปแบบพิเศษดังนี้เท่านั้น:
-
-<analysis>
-### อาการที่ตรวจพบ
-(อธิบายความเป็นไปได้ของโรคหรือสาเหตุอย่างละเอียดและเข้าใจง่าย)
-
-### คำแนะนำเบื้องต้น
-(แนะนำวิธีดูแลตัวเองอย่างละเอียด เป็นข้อๆ ใช้สัญลักษณ์ -)
-
-### ข้อควรระวัง
-(บอกอาการที่เป็นสัญญาณเตือนที่ต้องรีบไปพบแพทย์ทันที)
-</analysis>
-
-กฎสำคัญ:
-- เมื่อให้ผลวิเคราะห์ ต้องเริ่มต้นด้วยแท็ก <analysis> และจบด้วย </analysis> เท่านั้น ห้ามมีข้อความอื่นนอกแท็ก
-- ในการสนทนาปกติ ห้ามใช้รูปแบบการวิเคราะห์หรือแท็ก <analysis> เด็ดขาด
-- เรียกผู้ใช้งานว่า "คนไข้" เมื่อทำการวิเคราะห์ และเรียก "คุณ" ในการสนทนาทั่วไป`,
-                }
+            const apiResponse = await fetch('/api/gemini', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ prompt: text }),
             });
 
-            const responseText = response.text;
+            if (!apiResponse.ok) {
+                const errorData = await apiResponse.json();
+                throw new Error(errorData.error || `API call failed with status: ${apiResponse.status}`);
+            }
+            
+            const data = await apiResponse.json();
+            const responseText = data.text;
+
             if (!responseText) throw new Error("Empty response from AI");
 
             if (responseText.includes('<analysis>')) {
@@ -192,7 +177,7 @@ export const DrRakAvatar: React.FC = () => {
                 speakText(responseText);
             }
         } catch (err) {
-            console.error("Gemini API Error:", err);
+            console.error("API Request Error:", err);
             setError('ขออภัยค่ะ เกิดข้อผิดพลาดในการสื่อสารกับหมอรักษ์');
             setStatusText('แตะปุ่มไมค์เพื่อเริ่มคุยค่ะ');
         }
@@ -221,14 +206,13 @@ export const DrRakAvatar: React.FC = () => {
     };
 
     useEffect(() => {
-        // Fix: Use correctly typed window.SpeechRecognition and window.webkitSpeechRecognition.
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
+        const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognitionAPI) {
             setError('เบราว์เซอร์ของคุณไม่รองรับการแปลงเสียงเป็นข้อความค่ะ');
             return;
         }
 
-        const recognition = new SpeechRecognition();
+        const recognition = new SpeechRecognitionAPI();
         recognition.lang = 'th-TH';
         recognition.interimResults = true;
         recognition.continuous = false;
@@ -250,7 +234,9 @@ export const DrRakAvatar: React.FC = () => {
 
         recognition.onend = () => {
             setIsListening(false);
-            processRequest(finalTranscriptRef.current);
+            if(finalTranscriptRef.current) {
+                processRequest(finalTranscriptRef.current);
+            }
         };
 
         recognition.onerror = (event) => {
@@ -259,11 +245,11 @@ export const DrRakAvatar: React.FC = () => {
             setIsListening(false);
         };
 
-        aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-
         return () => {
             window.speechSynthesis.cancel();
-            recognition.stop();
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+            }
         };
     }, []);
 
@@ -273,6 +259,8 @@ export const DrRakAvatar: React.FC = () => {
             recognitionRef.current?.stop();
         } else if (isSpeaking) {
             window.speechSynthesis.cancel();
+            setIsSpeaking(false);
+            setStatusText('แตะปุ่มไมค์เพื่อเริ่มคุยค่ะ');
         } else {
             if (recognitionRef.current) {
                 setTranscript({ input: '', output: '' });
