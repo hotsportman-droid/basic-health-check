@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MicIcon, StopIcon, StethoscopeIcon, CheckCircleIcon, ExclamationIcon } from './icons';
-import { GoogleGenAI, LiveServerMessage, Modality, Type, FunctionDeclaration, Blob } from "@google/genai";
+import { GoogleGenAI, Modality, Type } from "@google/genai";
+import type { LiveServerMessage, FunctionDeclaration } from "@google/genai";
 
 // --- TYPES ---
 interface AnalysisData {
@@ -10,7 +12,7 @@ interface AnalysisData {
 }
 
 // --- AUDIO HELPERS ---
-function createBlob(data: Float32Array): Blob {
+function createBlob(data: Float32Array): { data: string; mimeType: string } {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
@@ -143,9 +145,7 @@ export const DrRakAvatar: React.FC = () => {
     const [analysisResult, setAnalysisResult] = useState<AnalysisData | null>(null);
     const [error, setError] = useState<string | null>(null);
     
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [nextStartTime, setNextStartTime] = useState<number>(0);
+    const nextStartTimeRef = useRef<number>(0);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const sessionRef = useRef<any>(null);
@@ -173,7 +173,7 @@ export const DrRakAvatar: React.FC = () => {
       
       setIsConnected(false);
       setIsSpeaking(false);
-      setNextStartTime(0);
+      nextStartTimeRef.current = 0;
     }, []);
 
     const connect = async () => {
@@ -246,7 +246,7 @@ export const DrRakAvatar: React.FC = () => {
                 
                 // Sync timing
                 const currentTime = outputCtx.currentTime;
-                let startTime = nextStartTime;
+                let startTime = nextStartTimeRef.current;
                 if (startTime < currentTime) startTime = currentTime;
                 
                 const audioBuffer = await decodeAudioData(
@@ -268,7 +268,7 @@ export const DrRakAvatar: React.FC = () => {
                 });
                 
                 source.start(startTime);
-                setNextStartTime(startTime + audioBuffer.duration);
+                nextStartTimeRef.current = startTime + audioBuffer.duration;
                 sourcesRef.current.add(source);
               }
 
@@ -276,7 +276,7 @@ export const DrRakAvatar: React.FC = () => {
               if (message.serverContent?.interrupted) {
                  sourcesRef.current.forEach(s => s.stop());
                  sourcesRef.current.clear();
-                 setNextStartTime(0);
+                 nextStartTimeRef.current = 0;
                  setIsSpeaking(false);
               }
             },
