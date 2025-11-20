@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { StethoscopeIcon, CheckCircleIcon, ExclamationIcon, SpeakerWaveIcon, MicIcon, StopIcon } from './icons';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 // --- Types for Speech Recognition ---
 // Use a type assertion to handle non-standard browser APIs
@@ -14,7 +14,15 @@ const MarkdownContent = ({ text }: { text: string }) => {
       <div className="space-y-2">
         {text.split('\n').map((line, i) => {
             const trimmed = line.trim();
-            if (trimmed.startsWith('-')) return <div key={i} className="flex items-start"><span className="mr-2 text-pink-500 mt-1.5">•</span><p className="flex-1 leading-relaxed">{trimmed.substring(1)}</p></div>;
+            // Handle bullets: -, *, •
+            if (trimmed.startsWith('-') || trimmed.startsWith('*') || trimmed.startsWith('•')) {
+                return (
+                    <div key={i} className="flex items-start">
+                        <span className="mr-2 text-pink-500 mt-1.5">•</span>
+                        <p className="flex-1 leading-relaxed">{trimmed.replace(/^[-*•]\s*/, '')}</p>
+                    </div>
+                );
+            }
             if (trimmed) return <p key={i} className="leading-relaxed">{trimmed}</p>;
             return null;
         })}
@@ -26,7 +34,7 @@ const DrRakImage = ({ onMicClick, interactionState }: { onMicClick: () => void, 
   <div className="relative w-32 h-32 md:w-40 md:h-40 mx-auto mb-6 group">
     <svg viewBox="0 0 200 200" className="w-full h-full drop-shadow-2xl filter transition-transform duration-500 transform group-hover:scale-105">
       {/* Background Aura */}
-      <circle cx="100" cy="100" r="90" fill="#FCE7F3" className={`opacity-50 ${interactionState === 'listening' || interactionState === 'speaking' ? 'animate-pulse' : ''}`} />
+      <circle cx="100" cy="100" r="90" fill="#FCE7F3" className={`opacity-50 ${interactionState === 'listening_wake' || interactionState === 'listening_symptoms' || interactionState === 'speaking' ? 'animate-pulse' : ''}`} />
       <circle cx="100" cy="100" r="82" fill="#FFFFFF" stroke="#F1F5F9" strokeWidth="2" />
       
       {/* Female Doctor Illustration */}
@@ -84,11 +92,13 @@ const DrRakImage = ({ onMicClick, interactionState }: { onMicClick: () => void, 
     <button 
         onClick={onMicClick}
         className={`absolute bottom-3 right-3 md:bottom-4 md:right-4 flex items-center justify-center rounded-full p-2 shadow-md transition-all duration-300 z-20
-            ${interactionState === 'listening' ? 'bg-red-500 hover:bg-red-600 animate-pulse scale-110' : 'bg-green-500 hover:bg-green-600'}
+            ${(interactionState === 'listening_wake' || interactionState === 'listening_symptoms') 
+                ? 'bg-red-500 hover:bg-red-600 animate-pulse scale-110' 
+                : 'bg-green-500 hover:bg-green-600'}
         `}
-        title={interactionState === 'listening' ? 'หยุดฟัง' : 'กดเพื่อคุยกับหมอ'}
+        title={(interactionState === 'listening_wake' || interactionState === 'listening_symptoms') ? 'หยุดฟัง' : 'กดเพื่อคุยกับหมอ'}
     >
-        {interactionState === 'listening' ? (
+        {(interactionState === 'listening_wake' || interactionState === 'listening_symptoms') ? (
             <div className="w-5 h-5 text-white flex items-center justify-center">
                  <div className="w-2 h-2 bg-white rounded-sm animate-ping absolute"></div>
                  <div className="w-2.5 h-2.5 bg-white rounded-sm relative"></div>
@@ -115,7 +125,7 @@ export const DrRakAvatar: React.FC = () => {
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [recognition, setRecognition] = useState<any>(null);
-
+    
     // Refs for controlling flow
     const recognitionRef = useRef<any>(null);
     const isListeningRef = useRef(false);
@@ -134,13 +144,12 @@ export const DrRakAvatar: React.FC = () => {
 
             recognizer.onend = () => {
                 isListeningRef.current = false;
-                // If we were listening for wake word and didn't get a match, we go back to idle
-                // Logic handled in onresult
+                // State management is handled in individual start functions
             };
 
             recognizer.onerror = (event: any) => {
                 console.error("Speech error", event.error);
-                if (interactionState !== 'idle') {
+                if (interactionState !== 'idle' && event.error !== 'no-speech') {
                      setInteractionState('idle');
                      if (event.error === 'not-allowed') {
                         setError('กรุณาอนุญาตให้ใช้ไมโครโฟนเพื่อคุยกับหมอค่ะ');
@@ -165,30 +174,38 @@ export const DrRakAvatar: React.FC = () => {
 
     const speak = (text: string, onEndCallback?: () => void) => {
         window.speechSynthesis.cancel();
+        if (!text) {
+             if (onEndCallback) onEndCallback();
+             return;
+        }
+
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'th-TH';
         utterance.rate = 1.0;
         
-        const setVoice = () => {
-            const voices = window.speechSynthesis.getVoices();
-            const thaiVoice = voices.find(v => v.lang.includes('th'));
-            if (thaiVoice) utterance.voice = thaiVoice;
-        };
-
-        if (window.speechSynthesis.getVoices().length === 0) {
-            window.speechSynthesis.onvoiceschanged = setVoice;
+        const voices = window.speechSynthesis.getVoices();
+        // Try to find a Thai female voice or any Thai voice
+        const thaiVoice = voices.find(v => v.lang.includes('th') && (v.name.includes('Somsri') || v.name.includes('Female')));
+        if (thaiVoice) {
+            utterance.voice = thaiVoice;
         } else {
-            setVoice();
+             const anyThai = voices.find(v => v.lang.includes('th'));
+             if (anyThai) utterance.voice = anyThai;
         }
 
         utterance.onstart = () => setInteractionState('speaking');
         utterance.onend = () => {
-            if (onEndCallback) onEndCallback();
-            // Note: Don't set idle here if we have a callback, let the callback decide
-            else setInteractionState('idle');
+            if (onEndCallback) {
+                // Small delay to ensure state clears before next action
+                setTimeout(onEndCallback, 100);
+            } else {
+                setInteractionState('idle');
+            }
         };
-        utterance.onerror = () => {
+        utterance.onerror = (e) => {
+            console.error("TTS Error", e);
             setInteractionState('idle');
+            // Fallback: if TTS fails, still try to proceed if it was a chain
             if (onEndCallback) onEndCallback();
         };
 
@@ -203,20 +220,23 @@ export const DrRakAvatar: React.FC = () => {
         setError(null);
         setInteractionState('listening_wake');
         
-        // Reset handlers for wake word phase
         recognition.onresult = (event: any) => {
-            const transcript = event.results[0][0].transcript;
+            const transcript = event.results[0][0].transcript.toLowerCase();
             console.log('Heard (Wake):', transcript);
             
-            if (transcript.includes('สวัสดี') || transcript.includes('หมอ') || transcript.includes('หวัดดี')) {
+            // More lenient wake word detection
+            if (transcript.includes('สวัสดี') || transcript.includes('หมอ') || transcript.includes('หวัดดี') || transcript.includes('hello')) {
                 handleGreeting();
             } else {
-                setError('หมอรอฟังคำว่า "สวัสดีหมอรักษ์" อยู่นะคะ');
+                // If wrong word, just stop or stay idle
                 setInteractionState('idle');
+                setError('หมอได้ยินไม่ชัด รบกวนพูดว่า "สวัสดีหมอรักษ์" ใหม่อีกครั้งนะคะ');
             }
         };
         
         recognition.onend = () => {
+            // If state is still listening_wake, it means no result (or error) stopped it.
+            // We reset to idle to let user press button again.
             if (interactionState === 'listening_wake') {
                  setInteractionState('idle');
             }
@@ -226,6 +246,7 @@ export const DrRakAvatar: React.FC = () => {
             recognition.start();
         } catch (e) {
             // Already started
+            recognition.stop();
         }
     };
 
@@ -244,7 +265,7 @@ export const DrRakAvatar: React.FC = () => {
         };
         
         recognition.onend = () => {
-            // If we didn't get result, go back to idle, otherwise handleAnalyze takes over
+            // If we didn't get result (silence), go back to idle
              if (inputText === '') setInteractionState('idle');
         };
 
@@ -258,7 +279,7 @@ export const DrRakAvatar: React.FC = () => {
 
     const handleMicClick = () => {
         if (interactionState === 'idle') {
-            // Hack for iOS Safari to "prime" the speech synthesis engine on user gesture
+            // "Prime" the speech synthesis engine for mobile browsers
             window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
             startListeningForWakeWord();
         } else if (interactionState === 'speaking') {
@@ -273,57 +294,74 @@ export const DrRakAvatar: React.FC = () => {
     const handleGreeting = async () => {
         setInteractionState('processing_greeting');
         
-        // Get Location
+        // Fallback function if geolocation fails or times out
+        const fallbackGreeting = () => {
+             speak("สวัสดีค่ะเพื่อนหมอรักษ์ หมอไม่สามารถระบุตำแหน่งของคุณได้ แต่เพื่อนหมอรักษ์เป็นอย่างไรบ้างคะ มีอาการอะไรบอกหมอได้เลยนะ", startListeningForSymptoms);
+        };
+
         if (!navigator.geolocation) {
-            speak("สวัสดีค่ะเพื่อนหมอรักษ์ หมอไม่สามารถระบุตำแหน่งของคุณได้ แต่เพื่อนหมอรักษ์เป็นอย่างไรบ้างคะ", startListeningForSymptoms);
+            fallbackGreeting();
             return;
         }
 
-        navigator.geolocation.getCurrentPosition(async (position) => {
+        // Wrap Geolocation in a Promise with Timeout
+        const getPosition = new Promise<GeolocationPosition>((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+                reject(new Error("Geolocation timeout"));
+            }, 5000); // 5 seconds timeout
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    clearTimeout(timeoutId);
+                    resolve(pos);
+                },
+                (err) => {
+                    clearTimeout(timeoutId);
+                    reject(err);
+                }
+            );
+        });
+
+        try {
+            const position = await getPosition;
             const { latitude, longitude } = position.coords;
             
-            try {
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            // Explicit prompt to force Search Grounding usage
+            const prompt = `
+                Perform a Google Search to find the current weather and PM2.5 (Air Quality) at coordinates: Latitude ${latitude}, Longitude ${longitude}.
                 
-                const prompt = `
-                    คุณคือ "หมอรักษ์" แพทย์ AI
-                    ผู้ใช้เพิ่งทักทายคุณว่า "สวัสดีหมอรักษ์"
-                    พิกัดของผู้ใช้คือ: ละติจูด ${latitude}, ลองจิจูด ${longitude}
-                    
-                    งานของคุณ:
-                    1. ค้นหาสภาพอากาศ (Weather) และค่าฝุ่น PM2.5 ณ พิกัดนี้ หรือชื่อเขต/จังหวัดใกล้เคียง
-                    2. กล่าวทักทาย "สวัสดีค่ะเพื่อนหมอรักษ์"
-                    3. รายงานสภาพอากาศและมลพิษแบบสั้นๆ เข้าใจง่าย (เช่น "วันนี้อากาศร้อน ระวังฝุ่นด้วยนะคะ")
-                    4. จบประโยคด้วยการถามว่า "เพื่อนหมอรักษ์ เป็นอย่างไรบ้างคะ"
-                    
-                    ตอบกลับเป็นข้อความสั้นๆ สำหรับพูดให้ผู้ใช้ฟัง ไม่ต้องมีโครงสร้าง XML
-                `;
+                Then, strictly act as "Dr. Rak" (a kind female doctor) and generate a spoken response in Thai.
+                The response must follow this pattern:
+                "สวัสดีค่ะเพื่อนหมอรักษ์ [Current Weather & PM2.5 Report]. เพื่อนหมอรักษ์ เป็นอย่างไรบ้างคะ"
 
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: prompt,
-                    config: {
-                        tools: [{ googleSearch: {} }] // Use Search grounding for weather
-                    }
-                });
-                
-                const text = response.text;
-                
+                Keep it natural, caring, and short (under 3 sentences).
+            `;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    tools: [{ googleSearch: {} }] 
+                }
+            });
+            
+            const text = response.text;
+            
+            if (text) {
                 // Speak greeting, then auto-listen for symptoms
-                speak(text || '', () => {
-                     // Give a small delay before listening again to avoid mic picking up speaker
-                     setTimeout(startListeningForSymptoms, 500);
+                speak(text, () => {
+                     startListeningForSymptoms();
                 });
-
-            } catch (e) {
-                console.error(e);
-                speak("สวัสดีค่ะเพื่อนหมอรักษ์ วันนี้อากาศเป็นอย่างไรบ้างคะ เพื่อนหมอรักษ์สบายดีไหม", startListeningForSymptoms);
+            } else {
+                throw new Error("No response from AI");
             }
 
-        }, (err) => {
-            console.warn("Geo error", err);
-            speak("สวัสดีค่ะเพื่อนหมอรักษ์ เพื่อนหมอรักษ์ เป็นอย่างไรบ้างคะ", startListeningForSymptoms);
-        });
+        } catch (e) {
+            console.error("Greeting Error:", e);
+            fallbackGreeting();
+        }
     };
 
     const handleAnalyze = async (textToAnalyze?: string) => {
@@ -336,6 +374,7 @@ export const DrRakAvatar: React.FC = () => {
         
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: text,
@@ -344,47 +383,51 @@ export const DrRakAvatar: React.FC = () => {
                     - บุคลิก: สุภาพ อ่อนโยน มีความเห็นอกเห็นใจ
                     - ภาษา: แทนตัวเองว่า "หมอ" ลงท้าย "คะ/ค่ะ"
                     - หน้าที่: ให้คำแนะนำสุขภาพเบื้องต้น (ห้ามวินิจฉัยโรค/จ่ายยา)
-                    
-                    ให้ตอบกลับในรูปแบบ XML:
-                      <response>
-                        <speech>ข้อความสรุปสั้นๆ เพื่อให้กำลังใจ (1-2 ประโยค)</speech>
-                        <analysis>
-                           <symptoms>สรุปอาการที่จับใจความได้ พร้อมสาเหตุที่เป็นไปได้ (Bullet points)</symptoms>
-                           <advice>คำแนะนำการดูแลตัวเองที่ละเอียด ปฏิบัติได้จริง (Bullet points)</advice>
-                           <precautions>สัญญาณอันตรายที่ต้องไปพบแพทย์</precautions>
-                        </analysis>
-                      </response>`
+                    `,
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            speech: { type: Type.STRING, description: "ข้อความพูดสรุปสั้นๆ ให้กำลังใจ (1-2 ประโยค)" },
+                            symptoms: { type: Type.STRING, description: "สรุปอาการที่จับใจความได้ พร้อมสาเหตุที่เป็นไปได้ (ใช้ bullet points)" },
+                            advice: { type: Type.STRING, description: "คำแนะนำการดูแลตัวเอง (ใช้ bullet points)" },
+                            precautions: { type: Type.STRING, description: "ข้อควรระวังหรือสัญญาณอันตรายที่ต้องไปพบแพทย์" }
+                        },
+                        required: ["speech", "symptoms", "advice", "precautions"]
+                    }
                 }
             });
 
-            const resultText = response.text || "";
+            const resultText = response.text || "{}";
+            let result;
             
-            // Parse XML
-            const speechMatch = resultText.match(/<speech>([\s\S]*?)<\/speech>/);
-            const symptomsMatch = resultText.match(/<symptoms>([\s\S]*?)<\/symptoms>/);
-            const adviceMatch = resultText.match(/<advice>([\s\S]*?)<\/advice>/);
-            const precautionsMatch = resultText.match(/<precautions>([\s\S]*?)<\/precautions>/);
+            try {
+                result = JSON.parse(resultText);
+            } catch (e) {
+                console.error("JSON Parse Error", e);
+                throw new Error("Invalid JSON response");
+            }
 
-            const speechText = speechMatch ? speechMatch[1].trim() : "";
-            const symptoms = symptomsMatch ? symptomsMatch[1].trim() : "-";
-            const advice = adviceMatch ? adviceMatch[1].trim() : "-";
-            const precautions = precautionsMatch ? precautionsMatch[1].trim() : "-";
+            const symptoms = result.symptoms || "-";
+            const advice = result.advice || "-";
+            const precautions = result.precautions || "-";
+            const speechText = result.speech || "หมอได้รับข้อมูลแล้วค่ะ";
 
             setAnalysis({
                 symptoms,
                 advice,
                 precautions,
-                speechText: speechText || resultText.replace(/<[^>]*>/g, '').trim()
+                speechText
             });
 
             // Construct full speech for reading out loud
             // We strip markdown bullets for smoother speech
             const fullReadOut = `
                 ${speechText}
-                สำหรับอาการที่คุณเล่ามา ${symptoms.replace(/-/g, '')}.
-                หมอขอแนะนำดังนี้ค่ะ. ${advice.replace(/-/g, '')}.
-                และข้อควรระวังคือ. ${precautions.replace(/-/g, '')}.
-                หายไวๆ นะคะ
+                สำหรับอาการที่คุณเล่ามา. ${symptoms.replace(/[-*•]/g, '')}.
+                หมอขอแนะนำดังนี้ค่ะ. ${advice.replace(/[-*•]/g, '')}.
+                และข้อควรระวังคือ. ${precautions.replace(/[-*•]/g, '')}.
+                ขอให้หายไวๆ นะคะ
             `;
             
             speak(fullReadOut);
@@ -393,10 +436,6 @@ export const DrRakAvatar: React.FC = () => {
             console.error("AI Error:", err);
             setError("เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้งค่ะ");
             setInteractionState('idle');
-        } finally {
-             if (interactionState !== 'speaking') {
-                // Usually speak() sets state to speaking, but if error/async timing issues
-             }
         }
     };
 
@@ -413,8 +452,7 @@ export const DrRakAvatar: React.FC = () => {
                 <div className="mb-8">
                     <h3 className="text-2xl font-extrabold text-slate-800 tracking-tight">ปรึกษาหมอรักษ์</h3>
                     <p className={`text-base transition-colors duration-300 mt-2
-                        ${interactionState === 'listening_wake' ? 'text-pink-600 font-bold animate-pulse' : 
-                          interactionState === 'listening_symptoms' ? 'text-pink-600 font-bold animate-pulse' : 
+                        ${(interactionState === 'listening_wake' || interactionState === 'listening_symptoms') ? 'text-pink-600 font-bold animate-pulse' : 
                           'text-slate-500'}`
                     }>
                         {interactionState === 'listening_wake' && "กำลังฟัง... พูดว่า 'สวัสดีหมอรักษ์'"}
@@ -434,10 +472,10 @@ export const DrRakAvatar: React.FC = () => {
                             onChange={(e) => setInputText(e.target.value)}
                             placeholder="พิมพ์อาการของคุณที่นี่... เช่น ปวดหัวข้างเดียว ตุ้บๆ แพ้แสง มา 2 วันแล้ว..."
                             className="w-full p-5 rounded-2xl border-2 border-slate-200 bg-slate-50 focus:bg-white focus:border-pink-400 focus:ring-4 focus:ring-pink-100 text-slate-700 resize-none transition-all h-36 text-base shadow-inner placeholder-slate-400"
-                            disabled={interactionState === 'processing_analysis' || interactionState === 'processing_greeting'}
+                            disabled={interactionState === 'processing_analysis' || interactionState === 'processing_greeting' || interactionState === 'listening_symptoms'}
                         />
                         {interactionState === 'listening_symptoms' && (
-                            <div className="absolute bottom-3 left-3 flex items-center text-pink-500 text-xs animate-pulse">
+                            <div className="absolute bottom-3 left-3 flex items-center text-pink-500 text-xs animate-pulse font-bold bg-white/80 px-2 py-1 rounded-lg shadow-sm">
                                 <MicIcon className="w-4 h-4 mr-1" /> กำลังบันทึกเสียง...
                             </div>
                         )}
@@ -466,9 +504,9 @@ export const DrRakAvatar: React.FC = () => {
                     </button>
                     
                     {error && (
-                        <div className="animate-fade-in p-3 bg-red-50 border border-red-100 rounded-xl flex items-center text-red-600 text-sm">
-                            <ExclamationIcon className="w-5 h-5 mr-2 shrink-0" />
-                            {error}
+                        <div className="animate-fade-in p-4 bg-red-50 border-l-4 border-red-500 rounded-r-xl flex items-start text-red-800 shadow-sm">
+                            <ExclamationIcon className="w-6 h-6 mr-3 shrink-0 text-red-600 mt-0.5" />
+                            <span className="text-sm font-medium leading-relaxed">{error}</span>
                         </div>
                     )}
                 </div>
