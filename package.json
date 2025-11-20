@@ -2,11 +2,6 @@
   "name": "health-app-dr-rak",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "dev": "echo 'Run locally'",
-    "build": "mkdir dist && cp -r components dist/ && cp index.html index.tsx App.tsx metadata.json constants.ts types.ts vite.svg manifest.json sw.js firebase.ts vercel.json dist/",
-    "start": "echo 'Start step'"
-  },
   "dependencies": {
     "@google/genai": "^1.30.0"
   },
