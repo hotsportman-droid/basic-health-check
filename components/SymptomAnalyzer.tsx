@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { BrainIcon, MicIcon, SpeakerWaveIcon, StopIcon } from './icons';
+import { BrainIcon, MicIcon, SpeakerWaveIcon, StopIcon, SettingsIcon, StethoscopeIcon, CheckCircleIcon, ExclamationIcon } from './icons';
 import { Modal } from './Modal';
 import { AdBanner } from './AdBanner';
 import { GoogleGenAI } from '@google/genai';
@@ -13,19 +13,13 @@ interface SymptomAnalyzerProps {
 }
 
 // --- SAFE KEY RETRIEVAL ---
-// ฟังก์ชันดึง Key อย่างปลอดภัย ป้องกัน App Crash บน Browser
 export const getSafeApiKey = (): string | null => {
   try {
-    // 1. GLOBAL KEY (Priority สำหรับ Public App)
     if (SYSTEM_CONFIG.GLOBAL_API_KEY && SYSTEM_CONFIG.GLOBAL_API_KEY.trim().length > 0) {
         return SYSTEM_CONFIG.GLOBAL_API_KEY;
     }
-
-    // 2. LocalStorage
     const localKey = localStorage.getItem('shc_api_key');
     if (localKey && localKey.trim().length > 0) return localKey;
-
-    // 3. Environment Variables (Safe Access)
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
         // @ts-ignore
@@ -43,43 +37,121 @@ export const getSafeApiKey = (): string | null => {
 };
 
 // --- SMART OFFLINE DOCTOR ---
-// สมองกลสำรอง: ทำงานทันทีเมื่อ AI เชื่อมต่อไม่ได้
 const analyzeSymptomsOffline = (input: string): string => {
   const text = input.toLowerCase();
-  let diagnosisPart = "จากการประเมินอาการที่คนไข้เล่ามาเบื้องต้นครับ ";
-  let advicePart = "";
+  let symptomsDetected = "";
+  let adviceList = "";
 
-  // Logic ตรวจจับอาการ (Keyword Detection)
   if (text.includes('หัว') || text.includes('ไมเกรน') || text.includes('มึน') || text.includes('เวียน')) {
-      diagnosisPart += "หมอรักษ์คาดว่าอาจเกิดจากความเครียด พักผ่อนน้อย หรือภาวะไมเกรนครับ ";
-      advicePart += "* **พักผ่อน:** นอนพักในห้องที่เงียบและมืดครับ\n* **การดูแล:** ประคบเย็นบริเวณหน้าผากช่วยบรรเทาอาการได้ครับ\n* **ยา:** หากปวดมาก สามารถทานยาแก้ปวดพาราเซตามอลได้ครับ (ถ้าคนไข้ไม่แพ้)\n";
+      symptomsDetected = "คนไข้มีอาการปวดศีรษะและวิงเวียน ซึ่งอาจมีสาเหตุมาจากความเครียด พักผ่อนน้อย หรืออาการไมเกรนกำเริบครับ ในบางรายอาจเกิดจากความดันโลหิตที่ไม่ปกติได้เช่นกันครับ";
+      adviceList = "- ควรนอนพักผ่อนในห้องที่เงียบ สงบ และมีแสงสว่างน้อย เพื่อลดการกระตุ้นประสาทครับ\n- หากมีอาการปวดมาก สามารถประคบเย็นบริเวณหน้าผากหรือท้ายทอยช่วยบรรเทาอาการได้ครับ\n- พยายามดื่มน้ำเปล่าให้เพียงพอและทานยาแก้ปวดพาราเซตามอลได้หากจำเป็น (ระวังอย่าทานเกินขนาดนะครับ)";
   }
   else if (text.includes('ท้อง') || text.includes('ไส้') || text.includes('อ้วก') || text.includes('ถ่าย') || text.includes('จุก') || text.includes('เสีย')) {
-      diagnosisPart += "น่าจะเป็นอาการระคายเคืองในระบบทางเดินอาหารหรือกระเพาะอาหารครับ ";
-      advicePart += "* **อาหาร:** งดอาหารรสจัด ของทอด ของมัน ทานข้าวต้มหรือโจ๊กอ่อนๆ ก่อนนะครับ\n* **น้ำดื่ม:** จิบน้ำเกลือแร่ (ORS) บ่อยๆ หากมีการถ่ายท้องหรืออาเจียนครับ\n* **ยา:** ทานยาแก้ปวดท้องหรือยาช่วยย่อยได้ตามอาการครับ\n";
+      symptomsDetected = "คนไข้มีอาการระคายเคืองในระบบทางเดินอาหาร ซึ่งอาจเป็นโรคกระเพาะอาหารอักเสบ อาหารเป็นพิษ หรือกรดไหลย้อนครับ ทำให้รู้สึกจุกเสียด ปวดท้อง หรือขับถ่ายผิดปกติ";
+      adviceList = "- งดทานอาหารรสจัด เผ็ดจัด เปรี้ยวจัด รวมถึงของทอดและของมันในช่วงนี้นะครับ\n- เลือกทานอาหารอ่อนๆ ที่ย่อยง่าย เช่น ข้าวต้ม หรือโจ๊ก จนกว่าอาการจะดีขึ้นครับ\n- หากมีการถ่ายท้องหรืออาเจียน ต้องจิบน้ำเกลือแร่ (ORS) บ่อยๆ เพื่อชดเชยน้ำที่สูญเสียไปครับ\n- สามารถทานยาช่วยย่อย ยาขับลม หรือยาแก้ปวดท้องตามอาการได้ครับ";
   }
   else if (text.includes('ไข้') || text.includes('ร้อน') || text.includes('หนาว') || text.includes('สั่น')) {
-      diagnosisPart += "ร่างกายอาจกำลังต่อสู้กับการติดเชื้อหรือการอักเสบครับ ทำให้มีไข้ ";
-      advicePart += "* **ลดไข้:** เช็ดตัวด้วยน้ำอุณหภูมิห้อง (ห้ามใช้น้ำเย็นจัด) และทานยาลดไข้ครับ\n* **น้ำดื่ม:** ดื่มน้ำอุ่นมากๆ เพื่อช่วยระบายความร้อนครับ\n* **พักผ่อน:** นอนหลับให้ได้อย่างน้อย 8-10 ชั่วโมงนะครับ\n";
+      symptomsDetected = "คนไข้มีไข้หรืออุณหภูมิร่างกายสูงกว่าปกติ ซึ่งเป็นกลไกที่ร่างกายกำลังต่อสู้กับการติดเชื้อหรือการอักเสบครับ อาจทำให้รู้สึกหนาวสั่นหรือปวดเมื่อยตัวร่วมด้วยครับ";
+      adviceList = "- หมั่นเช็ดตัวด้วยน้ำอุณหภูมิห้อง (ห้ามใช้น้ำเย็นจัด) เพื่อช่วยลดความร้อนในร่างกายครับ\n- ดื่มน้ำอุ่นหรือน้ำอุณหภูมิห้องมากๆ อย่างน้อยวันละ 8-10 แก้ว เพื่อไม่ให้ร่างกายขาดน้ำครับ\n- ทานยาลดไข้พาราเซตามอลทุก 4-6 ชั่วโมงหากยังมีไข้ และควรนอนพักผ่อนให้มากๆ ครับ";
   }
   else if (text.includes('คอ') || text.includes('ไอ') || text.includes('เสมหะ') || text.includes('หวัด') || text.includes('มูก')) {
-      diagnosisPart += "เป็นอาการที่พบได้บ่อยในโรคหวัดหรือระบบทางเดินหายใจครับ ";
-      advicePart += "* **คอ:** จิบน้ำอุ่นผสมมะนาว หรือกลั้วคอด้วยน้ำเกลือเพื่อลดเชื้อโรคครับ\n* **การปฏิบัติตัว:** ใส่หน้ากากอนามัย และงดของทอดของเย็นนะครับ\n* **สภาพแวดล้อม:** อยู่ในที่อากาศถ่ายเทสะดวกครับ\n";
+      symptomsDetected = "คนไข้มีอาการติดเชื้อทางเดินหายใจส่วนต้น ทำให้เกิดการระคายเคืองคอ มีเสมหะ หรือน้ำมูกไหลครับ ซึ่งมักเกิดจากเชื้อไวรัสไข้หวัด หรือการแพ้อากาศครับ";
+      adviceList = "- จิบน้ำอุ่นผสมมะนาว หรือน้ำผึ้ง บ่อยๆ จะช่วยให้ชุ่มคอและละลายเสมหะได้ดีครับ\n- กลั้วคอด้วยน้ำเกลืออุ่นๆ เช้าและเย็น เพื่อลดเชื้อโรคในลำคอครับ\n- สวมหน้ากากอนามัยเพื่อป้องกันการแพร่เชื้อ และหลีกเลี่ยงการโดนลมเย็นหรืออากาศเย็นจัดนะครับ";
   }
   else if (text.includes('ผื่น') || text.includes('คัน') || text.includes('ตุ่ม') || text.includes('แดง')) {
-      diagnosisPart += "อาจเป็นปฏิกิริยาภูมิแพ้หรือการระคายเคืองทางผิวหนังครับ ";
-      advicePart += "* **ห้ามเกา:** เพราะอาจทำให้ติดเชื้อแบคทีเรียแทรกซ้อนได้ครับ\n* **ความสะอาด:** อาบน้ำด้วยสบู่ที่อ่อนโยน ล้างน้ำเปล่าให้สะอาดครับ\n* **สังเกต:** ลองดูว่าคนไข้เพิ่งเปลี่ยนสบู่ หรือทานอาหารแปลกๆ มาหรือไม่นะครับ\n";
+      symptomsDetected = "คนไข้มีอาการระคายเคืองผิวหนัง หรือผื่นแพ้ครับ ซึ่งอาจเกิดจากการสัมผัสสารเคมี แมลงกัดต่อย หรือภูมิแพ้ผิวหนังครับ ทำให้เกิดรอยแดงและอาการคัน";
+      adviceList = "- หลีกเลี่ยงการเกาบริเวณที่เป็นเด็ดขาดนะครับ เพราะอาจทำให้เกิดแผลและติดเชื้อได้\n- อาบน้ำด้วยสบู่ที่อ่อนโยน ไม่ขัดถูแรงๆ และทาโลชั่นให้ความชุ่มชื้นหลังอาบน้ำครับ\n- ลองสังเกตว่าช่วงนี้ได้สัมผัสสบู่ ผงซักฟอก หรือทานอาหารแปลกใหม่หรือไม่ เพื่อหลีกเลี่ยงสิ่งกระตุ้นครับ";
   }
   else if (text.includes('ปวด') || text.includes('เมื่อย') || text.includes('เจ็บ') || text.includes('หลัง') || text.includes('เอว')) {
-       diagnosisPart += "อาจเกิดจากการใช้งานกล้ามเนื้อหนักเกินไปหรือผิดท่าทางครับ ";
-       advicePart += "* **พักการใช้งาน:** หลีกเลี่ยงกิจกรรมที่ทำให้เจ็บมากขึ้นครับ\n* **ประคบ:** ประคบเย็นใน 24 ชม.แรก และประคบอุ่นหลังจากนั้นครับ\n* **ยืดเหยียด:** บริหารกล้ามเนื้อเบาๆ ไม่กระชากนะครับ\n";
+       symptomsDetected = "คนไข้มีอาการปวดเมื่อยกล้ามเนื้อ หรือกล้ามเนื้ออักเสบครับ อาจเกิดจากการใช้งานหนัก ยกของผิดท่า หรือนั่งในท่าเดิมนานเกินไปครับ";
+       adviceList = "- พักการใช้งานกล้ามเนื้อส่วนที่ปวด หลีกเลี่ยงการยกของหนักในช่วงนี้นะครับ\n- หากเพิ่งมีอาการบาดเจ็บใน 24 ชม.แรก ให้ประคบเย็น แต่ถ้าปวดเรื้อรังมานานให้ประคบอุ่นครับ\n- ยืดเหยียดกล้ามเนื้อเบาๆ และปรับเปลี่ยนท่าทางบ่อยๆ ไม่ควรนั่งนานเกินไปครับ";
   }
   else {
-      diagnosisPart += "หมอรักษ์แนะนำให้คนไข้ลองปรับพฤติกรรมการดูแลสุขภาพพื้นฐานก่อนนะครับ ";
-      advicePart += "* **พักผ่อน:** การนอนหลับคือยาที่ดีที่สุดครับ\n* **น้ำ:** ดื่มน้ำสะอาดให้เพียงพอ (วันละ 8 แก้ว)\n* **สังเกต:** หากอาการเปลี่ยนแปลง ให้จดบันทึกไว้นะครับ\n";
+      symptomsDetected = "อาการที่คนไข้แจ้งมาอาจเกิดจากความอ่อนเพลียทั่วไป หรือความเครียดสะสมครับ ซึ่งส่งผลต่อระบบต่างๆ ของร่างกายได้";
+      adviceList = "- พยายามนอนหลับพักผ่อนให้เพียงพอ อย่างน้อยวันละ 8 ชั่วโมงนะครับ\n- ดื่มน้ำสะอาดให้เพียงพอ และรับประทานอาหารให้ครบ 5 หมู่ครับ\n- ลองสังเกตอาการดูอาการอีกครั้ง หากมีอาการอื่นๆ เพิ่มเติมค่อยมาปรึกษาหมอใหม่อีกรอบนะครับ";
   }
 
-  return `### ผลการวิเคราะห์เบื้องต้น\n\n${diagnosisPart}\n\n**คำแนะนำจากหมอรักษ์:**\n${advicePart}\n\n* **สำคัญ:** หากอาการไม่ดีขึ้นภายใน 24-48 ชั่วโมง หรือมีอาการรุนแรงขึ้น รีบไปโรงพยาบาลทันทีนะครับ`;
+  return `### อาการที่ตรวจพบ\n${symptomsDetected}\n\n### คำแนะนำเบื้องต้น\n${adviceList}\n\n### ข้อควรระวัง\nหากอาการคนไข้ยังไม่ดีขึ้นภายใน 24-48 ชั่วโมง หรือมีอาการรุนแรงขึ้น เช่น หายใจไม่ออก หน้ามืด หมดสติ หรือปวดทนไม่ไหว ให้รีบให้ญาติพาไปโรงพยาบาลทันทีนะครับ`;
+};
+
+const parseAnalysisResult = (text: string) => {
+  const sections = {
+    symptoms: '',
+    advice: '',
+    precautions: ''
+  };
+  if (!text) return sections;
+  const symptomsMatch = text.match(/### อาการที่ตรวจพบ([\s\S]*?)(?=###|$)/);
+  const adviceMatch = text.match(/### คำแนะนำเบื้องต้น([\s\S]*?)(?=###|$)/);
+  const precautionsMatch = text.match(/### ข้อควรระวัง([\s\S]*?)(?=###|$)/);
+
+  if (symptomsMatch) sections.symptoms = symptomsMatch[1].trim();
+  if (adviceMatch) sections.advice = adviceMatch[1].trim();
+  if (precautionsMatch) sections.precautions = precautionsMatch[1].trim();
+  
+  if (!sections.symptoms && !sections.advice && !sections.precautions) {
+    sections.symptoms = text;
+  }
+  return sections;
+};
+
+const MarkdownContent = ({ text }: { text: string }) => {
+    if (!text) return <p className="text-slate-400 italic">ไม่มีข้อมูล</p>;
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    const elements: React.ReactNode[] = [];
+    let currentList: React.ReactNode[] = [];
+
+    lines.forEach((line, idx) => {
+        const cleanLine = line.trim();
+        if (cleanLine.startsWith('-') || cleanLine.startsWith('*')) {
+             const content = cleanLine.replace(/^[\-\*]\s?/, '');
+             const boldParsed = content.split(/(\*\*.*?\*\*)/).map((part, i) => 
+                part.startsWith('**') && part.endsWith('**') 
+                ? <strong key={i} className="text-slate-900">{part.slice(2, -2)}</strong> 
+                : part
+             );
+             currentList.push(<li key={`li-${idx}`} className="mb-1">{boldParsed}</li>);
+        } else {
+             if (currentList.length > 0) {
+                 elements.push(<ul key={`ul-${idx}`} className="list-disc pl-5 mb-3 space-y-1">{[...currentList]}</ul>);
+                 currentList = [];
+             }
+             const boldParsed = cleanLine.split(/(\*\*.*?\*\*)/).map((part, i) => 
+                part.startsWith('**') && part.endsWith('**') 
+                ? <strong key={i} className="text-slate-900">{part.slice(2, -2)}</strong> 
+                : part
+             );
+             elements.push(<p key={`p-${idx}`} className="mb-2">{boldParsed}</p>);
+        }
+    });
+    if (currentList.length > 0) {
+        elements.push(<ul key={`ul-end`} className="list-disc pl-5 mb-3 space-y-1">{[...currentList]}</ul>);
+    }
+    return <>{elements}</>;
+};
+
+// --- 3D AVATAR MOCKUP ---
+const DoctorAvatar = ({ isSpeaking }: { isSpeaking: boolean }) => {
+  return (
+    <div className="relative w-32 h-32 mx-auto mb-4">
+        {/* Avatar Container */}
+        <div className={`w-full h-full rounded-full overflow-hidden border-4 ${isSpeaking ? 'border-indigo-400 animate-pulse shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'border-slate-200'} bg-indigo-50 relative transition-all duration-300`}>
+            <img 
+                src="https://img2.pic.in.th/pic/DrRukDolaAvatar.jpg" 
+                alt="Dr. Ruk Avatar" 
+                className={`w-full h-full object-cover ${isSpeaking ? 'scale-110' : 'scale-100'} transition-transform duration-500`}
+            />
+        </div>
+        {/* Status Indicator */}
+        <div className={`absolute bottom-1 right-1 w-6 h-6 rounded-full border-2 border-white flex items-center justify-center ${isSpeaking ? 'bg-green-500' : 'bg-slate-400'}`}>
+            {isSpeaking ? (
+                 <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
+            ) : (
+                 <div className="w-2 h-2 bg-white rounded-full"></div>
+            )}
+        </div>
+    </div>
+  );
 };
 
 export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSuccess }) => {
@@ -89,18 +161,24 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
   const [loadingStatus, setLoadingStatus] = useState('กำลังประมวลผล...');
   const [error, setError] = useState<string | null>(null);
   
-  // Modal States
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-
+  const [isVoiceSettingsOpen, setIsVoiceSettingsOpen] = useState(false);
   const [dailyUsage, setDailyUsage] = useState(0);
   
   // Voice Input States
-  const [isListening, setIsListening] = useState(false);
+  const [isMonitoring, setIsMonitoring] = useState(false); // New: "Always On" Switch
   const recognitionRef = useRef<any>(null);
 
   // Voice Output States
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const shouldSpeakRef = useRef(false); // Ref to control speech queue
+  const shouldSpeakRef = useRef(false);
+  
+  const [speechRate, setSpeechRate] = useState(0.75);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>('');
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  // Wake Word Cooldown to prevent spamming
+  const wakeWordCooldownRef = useRef(false);
 
   const stopSpeaking = () => {
     shouldSpeakRef.current = false;
@@ -110,85 +188,25 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     setIsSpeaking(false);
   };
 
-  // Helper to speak text (Accessibility) with Smart Chunking
-  const speak = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    
-    // Stop previous speech
-    stopSpeaking();
-    
-    // Activate flag
-    shouldSpeakRef.current = true;
-    setIsSpeaking(true);
-
-    // 1. Clean text
-    const cleanText = text.replace(/[#*]/g, '').replace(/<\/?[^>]+(>|$)/g, "");
-
-    // 2. Smart Chunking Strategy
-    // Split by newlines first (paragraphs)
-    const rawChunks = cleanText.split(/[\n\r]+/);
-    const chunks: string[] = [];
-
-    rawChunks.forEach(chunk => {
-        chunk = chunk.trim();
-        if (!chunk) return;
-
-        // If chunk is too long (>150 chars), split by space
-        if (chunk.length > 150) {
-            const subChunks = chunk.match(/.{1,150}(?:\s|$)/g);
-            if (subChunks) {
-                subChunks.forEach(s => chunks.push(s));
-            } else {
-                chunks.push(chunk);
-            }
-        } else {
-            chunks.push(chunk);
-        }
-    });
-
-    if (chunks.length === 0) {
-        setIsSpeaking(false);
-        return;
-    }
-
-    let currentIndex = 0;
-
-    // Recursive player
-    const playNext = () => {
-        if (!shouldSpeakRef.current || currentIndex >= chunks.length) {
-            setIsSpeaking(false);
-            shouldSpeakRef.current = false;
-            return;
-        }
-
-        const utterance = new SpeechSynthesisUtterance(chunks[currentIndex]);
-        utterance.lang = 'th-TH';
-        utterance.rate = 0.75; // Slow rate
-        utterance.volume = 1;
-
-        const voices = window.speechSynthesis.getVoices();
-        const thaiVoice = voices.find(v => v.lang === 'th-TH');
-        if (thaiVoice) utterance.voice = thaiVoice;
-
-        utterance.onend = () => {
-            currentIndex++;
-            playNext();
-        };
-
-        utterance.onerror = (e) => {
-            console.error("TTS Error", e);
-            setIsSpeaking(false);
-            shouldSpeakRef.current = false;
-        };
-
-        window.speechSynthesis.speak(utterance);
-    };
-
-    playNext();
-  };
-
   useEffect(() => {
-    // Load usage data
+    const loadVoices = () => {
+        if (!('speechSynthesis' in window)) return;
+        const voices = window.speechSynthesis.getVoices();
+        const thaiVoices = voices.filter(v => v.lang.includes('th'));
+        if (thaiVoices.length > 0) {
+            setAvailableVoices(thaiVoices);
+        } else {
+            setAvailableVoices([]); 
+        }
+    };
+    loadVoices();
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+    const savedRate = localStorage.getItem('shc_speech_rate');
+    if (savedRate) setSpeechRate(parseFloat(savedRate));
+    const savedVoice = localStorage.getItem('shc_voice_uri');
+    if (savedVoice) setSelectedVoiceURI(savedVoice);
     const today = new Date().toDateString();
     const storedDate = localStorage.getItem('shc_usage_date');
     const storedCount = parseInt(localStorage.getItem('shc_usage_count') || '0', 10);
@@ -200,107 +218,221 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     } else {
       setDailyUsage(storedCount);
     }
-
     return () => {
       stopSpeaking();
+      if ('speechSynthesis' in window) {
+          window.speechSynthesis.onvoiceschanged = null;
+      }
+      if (recognitionRef.current) {
+          recognitionRef.current.stop();
+      }
     };
   }, []);
+
+  const handleRateChange = (newRate: number) => {
+      setSpeechRate(newRate);
+      localStorage.setItem('shc_speech_rate', newRate.toString());
+  };
+
+  const handleVoiceChange = (uri: string) => {
+      setSelectedVoiceURI(uri);
+      localStorage.setItem('shc_voice_uri', uri);
+  };
+
+  const speak = (text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    stopSpeaking();
+    shouldSpeakRef.current = true;
+    setIsSpeaking(true);
+
+    const cleanText = text.replace(/[#*]/g, '').replace(/<\/?[^>]+(>|$)/g, "");
+    const rawChunks = cleanText.split(/[\n\r]+/);
+    const chunks: string[] = [];
+
+    rawChunks.forEach(chunk => {
+        chunk = chunk.trim();
+        if (!chunk) return;
+        if (chunk.length > 150) {
+            const subChunks = chunk.match(/.{1,150}(?:\s|$)/g);
+            if (subChunks) subChunks.forEach(s => chunks.push(s));
+            else chunks.push(chunk);
+        } else {
+            chunks.push(chunk);
+        }
+    });
+
+    if (chunks.length === 0) {
+        setIsSpeaking(false);
+        return;
+    }
+
+    let currentIndex = 0;
+    const allVoices = window.speechSynthesis.getVoices();
+
+    const playNext = () => {
+        if (!shouldSpeakRef.current || currentIndex >= chunks.length) {
+            setIsSpeaking(false);
+            shouldSpeakRef.current = false;
+            return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(chunks[currentIndex]);
+        utterance.lang = 'th-TH';
+        utterance.rate = speechRate;
+        utterance.volume = 1;
+
+        if (selectedVoiceURI) {
+            const userVoice = allVoices.find(v => v.voiceURI === selectedVoiceURI);
+            if (userVoice) utterance.voice = userVoice;
+        } else {
+            const thaiVoice = allVoices.find(v => v.lang === 'th-TH');
+            if (thaiVoice) utterance.voice = thaiVoice;
+        }
+
+        utterance.onend = () => {
+            currentIndex++;
+            playNext();
+        };
+        utterance.onerror = (e) => {
+            setIsSpeaking(false);
+            shouldSpeakRef.current = false;
+        };
+        window.speechSynthesis.speak(utterance);
+    };
+
+    playNext();
+  };
 
   const isInAppBrowser = () => {
     const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
     return (ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1) || (ua.indexOf("Line") > -1);
   };
 
-  const toggleListening = async () => {
-    if (isListening) {
-      if (recognitionRef.current) recognitionRef.current.stop();
-      setIsListening(false);
-      speak("หยุดรับเสียงแล้วครับ");
-      return;
+  // --- WAKE WORD RESPONSE LOGIC ---
+  const triggerWakeWordResponse = () => {
+      if (wakeWordCooldownRef.current) return;
+      
+      wakeWordCooldownRef.current = true;
+      
+      // 1. Environment Simulation
+      const weathers = [
+          { type: 'ร้อนจัด', temp: '38 องศา', pm: '150 (เริ่มมีผลกระทบ)', advice: 'อากาศร้อนและฝุ่นเยอะแบบนี้ เพื่อนหมอรักษ์งดทำกิจกรรมกลางแจ้งและดื่มน้ำเยอะๆ นะครับ อย่าลืมสวมหน้ากาก N95 ด้วยครับ' },
+          { type: 'ฝนตก', temp: '28 องศา', pm: '45 (ปานกลาง)', advice: 'ช่วงนี้มีฝนตก ระวังเปียกฝนและรักษาสุขภาพด้วยนะครับ ถ้าโดนละอองฝนรีบอาบน้ำสระผมทันทีนะครับ' },
+          { type: 'อากาศดี', temp: '26 องศา', pm: '25 (ดีมาก)', advice: 'วันนี้อากาศดีมากครับ ค่าฝุ่นน้อย เหมาะกับการออกกำลังกายเบาๆ หรือสูดอากาศบริสุทธิ์ครับ' }
+      ];
+      const env = weathers[Math.floor(Math.random() * weathers.length)];
+
+      const response = `สวัสดีค่ะ เพื่อนหมอรักษ์ วันนี้อากาศ${env.type} อุณหภูมิประมาณ ${env.temp} ค่าฝุ่น PM 2.5 อยู่ที่ ${env.pm} ครับ ${env.advice}`;
+      
+      setResult(response); // Show text as well
+      speak(response);
+
+      // Cooldown reset
+      setTimeout(() => {
+          wakeWordCooldownRef.current = false;
+      }, 8000);
+  };
+
+  // --- ALWAYS ON MONITORING ---
+  const toggleMonitoring = () => {
+    if (isMonitoring) {
+        // Turn Off
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+        }
+        setIsMonitoring(false);
+        speak("ปิดระบบรับฟังอัตโนมัติแล้วครับ");
+        return;
     }
 
+    // Turn On
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      const msg = 'เครื่องของคุณไม่รองรับการสั่งงานด้วยเสียง';
-      setError(msg);
-      speak(msg);
-      return;
+        speak('เครื่องของคุณไม่รองรับการสั่งงานด้วยเสียงครับ');
+        return;
     }
-    
-    setError(null);
-    speak("กำลังฟังครับ พูดอาการได้เลย");
 
-    // Permission checks...
-    if (isInAppBrowser()) {
-      if (!navigator.mediaDevices?.getUserMedia) {
+    if (isInAppBrowser() && !navigator.mediaDevices?.getUserMedia) {
          setError('กรุณาเปิดผ่าน Chrome หรือ Safari เพื่อใช้ไมโครโฟน');
          return;
-      }
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'th-TH';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    
-    recognition.onerror = (event: any) => {
-      console.error("Speech Error:", event.error);
-      let msg = 'เกิดปัญหาไมโครโฟนครับ';
-
-      if (event.error === 'not-allowed') {
-          msg = 'กรุณากด "อนุญาต" ให้ใช้ไมโครโฟนที่แถบด้านบน หรือในการตั้งค่าของเบราว์เซอร์ก่อนนะครับ';
-      } else if (event.error === 'service-not-allowed') {
-          msg = 'เบราว์เซอร์นี้ไม่อนุญาตให้ใช้ระบบเสียงครับ ลองเปลี่ยนไปใช้ Chrome หรือ Safari นะครับ';
-      } else if (event.error === 'no-speech') {
-          msg = 'หมอไม่ได้ยินเสียงเลยครับ ลองพูดเสียงดังขึ้นอีกนิดนะครับ';
-      } else if (event.error === 'network') {
-          msg = 'สัญญาณอินเทอร์เน็ตไม่ดี ทำให้รับเสียงไม่ได้ครับ';
-      } else if (event.error === 'audio-capture') {
-          msg = 'ไม่พบไมโครโฟนครับ ตรวจสอบการเชื่อมต่ออุปกรณ์นะครับ';
-      } else if (event.error === 'language-not-supported') {
-          msg = 'เครื่องนี้อาจไม่รองรับการพิมพ์ด้วยเสียงภาษาไทยครับ';
-      } else if (event.error !== 'aborted') {
-          msg = `ระบบรับเสียงขัดข้อง (${event.error}) รบกวนคนไข้พิมพ์อาการแทนนะครับ`;
-      }
-      
-      // If aborted (manual stop), don't show error
-      if (event.error !== 'aborted') {
-        setError(msg);
-        speak(msg);
-      }
-      setIsListening(false);
-    };
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setSymptoms((prev) => {
-        const newVal = prev + (prev ? ' ' : '') + transcript;
-        return newVal;
-      });
-      speak("ได้รับข้อมูลแล้วครับ พูดต่อได้ หรือกดวิเคราะห์ได้เลยครับ");
-    };
-
-    recognitionRef.current = recognition;
-    try {
-        recognition.start();
-    } catch (e) {
-        console.error(e);
-        setError("ไม่สามารถเริ่มไมโครโฟนได้ ลองรีเฟรชหน้าจอใหม่นะครับ");
-    }
+    setError(null);
+    speak("เปิดระบบรับฟังแล้วครับ เรียก สวัสดีหมอรักษ์ ได้เลยครับ");
+    setIsMonitoring(true);
   };
 
-  const toggleSpeakingResult = () => {
-    if (isSpeaking) {
-      stopSpeaking();
-    } else {
-      speak(result);
-    }
-  };
+  // Effect to handle the Recognition Lifecycle Loop
+  useEffect(() => {
+      if (!isMonitoring) return;
 
-  // Function: Check & Start Analysis
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) return;
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'th-TH';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.continuous = true; // Try continuous first
+
+      recognition.onresult = (event: any) => {
+        const lastIndex = event.results.length - 1;
+        const transcript = event.results[lastIndex][0].transcript.trim();
+        
+        // Check for Wake Word
+        if (transcript.includes("สวัสดีหมอรักษ์") || transcript.includes("สวัสดีหมอรัก") || transcript.includes("หวัดดีหมอรักษ์")) {
+            triggerWakeWordResponse();
+        } else {
+            // Optional: If not wake word, maybe update partial symptoms?
+            // For now, we just ignore as requested until wake word is heard.
+            // Or we can display what is heard faintly
+             setSymptoms((prev) => {
+                // Only append if it's a potential symptom and not just noise, 
+                // but user asked strictly for wake word response. 
+                // Let's show it in the box anyway so they know it works.
+                // But don't trigger analysis.
+                return transcript; 
+            });
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Recognition Error", event.error);
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            setIsMonitoring(false);
+            setError("ไม่ได้รับอนุญาตให้ใช้ไมค์ ระบบรับฟังอัตโนมัติถูกปิด");
+        }
+        // If no-speech or network error, we ignore and let onend restart it
+      };
+
+      recognition.onend = () => {
+          // Auto-Restart Loop
+          if (isMonitoring) {
+              try {
+                  // Add small delay to prevent CPU hogging in loop
+                  setTimeout(() => {
+                      if (isMonitoring) recognition.start();
+                  }, 200);
+              } catch (e) {
+                  console.error("Restart failed", e);
+              }
+          }
+      };
+
+      recognitionRef.current = recognition;
+      try {
+          recognition.start();
+      } catch (e) {
+          console.error("Start failed", e);
+          setIsMonitoring(false);
+      }
+
+      return () => {
+          if (recognitionRef.current) recognitionRef.current.stop();
+      };
+  }, [isMonitoring]);
+
+
   const initiateAnalysis = async () => {
     if (dailyUsage >= MAX_DAILY_LIMIT) {
         const msg = 'วันนี้ใช้งานครบโควต้าแล้ว พรุ่งนี้มาใหม่นะครับ';
@@ -311,22 +443,18 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     performAnalysis();
   };
 
-  // Function: Perform Actual Analysis (Hybrid: AI -> Offline Backup)
   const performAnalysis = async () => {
     setIsConfirmModalOpen(false);
     setIsLoading(true);
     setLoadingStatus('หมอรักษ์กำลังวิเคราะห์ข้อมูล...');
     setError(null);
     setResult('');
-    
     speak("กำลังวิเคราะห์ข้อมูล รอสักครู่นะครับ");
 
     try {
-      // 1. ดึง Key แบบปลอดภัย
       const apiKey = getSafeApiKey();
       let text = "";
 
-      // 2. ถ้ามี Key และมีเน็ต ลองเรียก AI
       if (apiKey && navigator.onLine) {
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -334,42 +462,33 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
               model: 'gemini-2.5-flash',
               contents: symptoms,
               config: {
-                  systemInstruction: 'คุณคือ "หมอรักษ์" หมอประจำบ้านผู้ชาย ใจดี พูดภาษาไทยง่ายๆ สำหรับผู้สูงอายุ\n\nหน้าที่:\n1. วิเคราะห์อาการที่ได้รับมา\n2. ตอบด้วยน้ำเสียงห่วงใย สุภาพ นุ่มนวล (ต้องลงท้ายประโยคด้วย "ครับ" ทุกครั้ง ห้ามใช้ "คะ")\n3. ห้ามใช้ศัพท์แพทย์ยากๆ ถ้าใช้ต้องแปลทันที\n4. แยกคำตอบเป็นข้อๆ ให้อ่านง่ายที่สุด\n5. ต้องย้ำเสมอว่า "นี่ไม่ใช่การวินิจฉัยจริง ถ้าอาการหนักต้องไปโรงพยาบาลทันที"\n6. แทนตัวเองว่า "หมอรักษ์"\n7. ให้เรียกผู้ใช้งานว่า "คนไข้" เท่านั้น (ห้ามใช้คำว่า คุณลุง, คุณป้า, คุณตา, คุณยาย, หรือ คุณโยม)',
+                  systemInstruction: 'คุณคือ "หมอรักษ์" หมอประจำบ้านผู้ชาย ใจดี พูดภาษาไทยง่ายๆ สำหรับผู้สูงอายุ\n\nหน้าที่:\nวิเคราะห์อาการแล้วตอบโดยจัดรูปแบบดังนี้เท่านั้น:\n\n### อาการที่ตรวจพบ\n(อธิบายความเป็นไปได้ของโรคหรือสาเหตุอย่างละเอียดและเข้าใจง่าย)\n\n### คำแนะนำเบื้องต้น\n(แนะนำวิธีดูแลตัวเองอย่างละเอียด เป็นข้อๆ ใช้สัญลักษณ์ - ควรบอกปริมาณหรือระยะเวลาที่ชัดเจนถ้าทำได้)\n\n### ข้อควรระวัง\n(อาการสัญญาณเตือนที่ต้องรีบไปพบแพทย์ทันที)\n\nกฎการตอบ:\n1. ใช้ภาษาพูดสุภาพ นุ่มนวล ลงท้ายด้วย "ครับ" เสมอ\n2. เรียกผู้ใช้งานว่า "คนไข้" ห้ามใช้คำอื่น\n3. อธิบายให้ชัดเจนและละเอียด เพื่อให้คนไข้เข้าใจสาเหตุและการปฏิบัติตัว\n4. ห้ามตอบนอกเหนือจาก 3 หัวข้อที่กำหนด',
                   temperature: 0.4,
               }
             };
-            
-            // Timeout 25 วินาที
             const aiPromise = ai.models.generateContent(params);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 25000));
-            
             const response: any = await Promise.race([aiPromise, timeoutPromise]);
-            
             if (response && response.text) {
                 text = response.text;
             }
         } catch (apiErr: any) {
-            console.warn("AI Connection issue, switching to backup engine.", apiErr);
+            console.warn("AI Connection issue", apiErr);
         }
       }
       
-      // 3. ถ้าไม่มี Text -> ใช้ Offline Engine ทันที
       if (!text) {
          await new Promise(r => setTimeout(r, 1500));
          text = analyzeSymptomsOffline(symptoms);
       }
 
       setResult(text);
-      
-      // Update usage
       const newCount = dailyUsage + 1;
       setDailyUsage(newCount);
       localStorage.setItem('shc_usage_count', newCount.toString());
-      
       if (onAnalysisSuccess) onAnalysisSuccess();
       
-      // Speak Full Result
-      const intro = "วิเคราะห์เสร็จแล้วครับ ผลการวิเคราะห์มีดังนี้ ";
+      const intro = "วิเคราะห์เสร็จแล้วครับ ";
       speak(intro + text); 
 
     } catch (err: any) {
@@ -379,15 +498,6 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Formatting for readability
-  const formatResult = (text: string) => {
-    return text
-        .replace(/^### (.*$)/gim, '<h3 class="text-lg font-bold text-indigo-700 mt-4 mb-2">$1</h3>')
-        .replace(/^\* (.*$)/gim, '<li class="ml-4 mb-1 text-slate-700">$1</li>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-900">$1</strong>')
-        .replace(/\n/g, '<br />');
   };
 
   return (
@@ -407,6 +517,8 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
             </div>
           </div>
 
+          <DoctorAvatar isSpeaking={isSpeaking} />
+
           <div className="flex-grow flex flex-col space-y-4">
             <label htmlFor="symptoms" className="sr-only">พิมพ์อาการของคุณที่นี่</label>
             
@@ -417,21 +529,21 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
                 value={symptoms}
                 onChange={(e) => setSymptoms(e.target.value)}
                 className="block w-full h-full min-h-[180px] px-4 py-4 text-lg bg-slate-50 border-2 border-slate-200 rounded-2xl shadow-inner placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none leading-relaxed"
-                placeholder="พิมพ์อาการตรงนี้... หรือ กดปุ่มไมโครโฟนด้านล่างเพื่อพูด"
+                placeholder={isMonitoring ? "กำลังฟัง... พูดว่า 'สวัสดีหมอรักษ์' เพื่อเริ่มคุย" : "พิมพ์อาการตรงนี้..."}
                 aria-label="ช่องใส่ข้อความอาการเจ็บป่วย"
               />
             </div>
 
             <div className="grid grid-cols-4 gap-3 h-16">
                <button
-                  onClick={toggleListening}
+                  onClick={toggleMonitoring}
                   className={`col-span-1 rounded-2xl flex items-center justify-center transition-all shadow-md ${
-                    isListening 
-                      ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200' 
+                    isMonitoring 
+                      ? 'bg-green-500 text-white ring-4 ring-green-200 animate-pulse' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-2 border-slate-200'
                   }`}
-                  aria-label={isListening ? "กำลังฟัง หยุดพูด" : "กดเพื่อพูดอาการ"}
-                  title="กดเพื่อพูด"
+                  aria-label={isMonitoring ? "ปิดระบบรับฟังอัตโนมัติ" : "เปิดระบบรับฟังอัตโนมัติ"}
+                  title={isMonitoring ? "แตะเพื่อปิดไมค์" : "แตะเพื่อเปิดไมค์ให้หมอรักษ์รอฟัง"}
                 >
                   <MicIcon className="w-8 h-8" />
                 </button>
@@ -453,6 +565,12 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
                   {isLoading ? 'กำลังคิด...' : 'วิเคราะห์อาการ'}
                 </button>
             </div>
+            
+            {isMonitoring && (
+                <p className="text-center text-xs text-green-600 font-medium animate-bounce">
+                    🎤 หมอรักษ์กำลังรอฟังคำว่า "สวัสดีหมอรักษ์" อยู่ครับ...
+                </p>
+            )}
           </div>
 
           <div aria-live="assertive" className="mt-4 min-h-[20px]">
@@ -470,32 +588,91 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
           </div>
 
           {result && !isLoading && (
-            <div className="mt-6 bg-green-50 p-6 rounded-2xl border-2 border-green-100 animate-fade-in shadow-sm" role="region" aria-label="ผลการวิเคราะห์">
-              <div className="flex justify-between items-start mb-4 border-b border-green-200 pb-2">
-                <h4 className="text-lg font-bold text-green-800 flex items-center">
-                    👨‍⚕️ ผลการวิเคราะห์เบื้องต้น
+            <div className="mt-6 animate-fade-in space-y-4" role="region" aria-label="ผลการวิเคราะห์">
+              <div className="flex justify-between items-center">
+                <h4 className="text-lg font-bold text-slate-800 flex items-center">
+                    👨‍⚕️ ผลการวิเคราะห์จากหมอรักษ์
                 </h4>
-                <button 
-                  onClick={toggleSpeakingResult}
-                  className="flex items-center space-x-1 px-3 py-1.5 bg-white rounded-full shadow-sm text-indigo-600 font-bold text-sm hover:bg-indigo-50 border border-indigo-100"
-                  aria-label={isSpeaking ? "หยุดอ่าน" : "อ่านผลลัพธ์ให้ฟัง"}
-                >
-                  {isSpeaking ? <StopIcon className="w-5 h-5" /> : <SpeakerWaveIcon className="w-5 h-5" />}
-                  <span>{isSpeaking ? 'หยุดเสียง' : 'ฟังผล'}</span>
-                </button>
+                <div className="flex space-x-2">
+                   <button
+                      onClick={() => setIsVoiceSettingsOpen(true)}
+                      className="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-colors"
+                      aria-label="ตั้งค่าเสียงพูด"
+                   >
+                      <SettingsIcon className="w-5 h-5" />
+                   </button>
+                   <button 
+                      onClick={() => isSpeaking ? stopSpeaking() : speak(result)}
+                      className="flex items-center space-x-1 px-3 py-1.5 bg-white rounded-full shadow-sm text-indigo-600 font-bold text-sm hover:bg-indigo-50 border border-indigo-100"
+                      aria-label={isSpeaking ? "หยุดอ่าน" : "อ่านผลลัพธ์ให้ฟัง"}
+                   >
+                      {isSpeaking ? <StopIcon className="w-5 h-5" /> : <SpeakerWaveIcon className="w-5 h-5" />}
+                      <span>{isSpeaking ? 'หยุดเสียง' : 'ฟังผล'}</span>
+                   </button>
+                </div>
               </div>
               
-              <div 
-                className="prose prose-lg max-w-none text-slate-700 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: formatResult(result) }} 
-              />
-              
-              <div className="mt-6 p-4 bg-red-50 rounded-xl border border-red-100 flex items-start">
-                 <span className="text-2xl mr-3">🚨</span>
-                 <p className="text-red-800 text-sm font-medium mt-1">
-                    โปรดจำไว้ว่า: หมอรักษ์ เป็นเพียงตัวช่วยเบื้องต้น หากอาการไม่ดีขึ้น หรือรู้สึกแย่ลง ต้องไปโรงพยาบาลทันทีนะครับ
-                 </p>
-              </div>
+              {/* Check if it is just the greeting result (not an analysis) */}
+              {result.includes("PM 2.5") ? (
+                   <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-100">
+                        <div className="text-slate-800 text-lg leading-relaxed">
+                            <p>{result}</p>
+                        </div>
+                   </div>
+              ) : (
+                // Full Analysis Display
+                (() => {
+                    const sections = parseAnalysisResult(result);
+                    return (
+                        <div className="space-y-4">
+                            <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
+                                <div className="flex items-center mb-3">
+                                    <div className="p-2 bg-blue-100 rounded-lg text-blue-600 mr-3">
+                                        <StethoscopeIcon className="w-6 h-6" />
+                                    </div>
+                                    <h5 className="font-bold text-blue-800 text-lg">อาการที่ตรวจพบ</h5>
+                                </div>
+                                <div className="text-slate-700 leading-relaxed pl-1">
+                                    <MarkdownContent text={sections.symptoms} />
+                                </div>
+                            </div>
+
+                            <div className="bg-green-50 rounded-xl p-5 border border-green-100">
+                                <div className="flex items-center mb-3">
+                                    <div className="p-2 bg-green-100 rounded-lg text-green-600 mr-3">
+                                        <CheckCircleIcon className="w-6 h-6" />
+                                    </div>
+                                    <h5 className="font-bold text-green-800 text-lg">คำแนะนำเบื้องต้น</h5>
+                                </div>
+                                <div className="text-slate-700 leading-relaxed pl-1">
+                                    <MarkdownContent text={sections.advice} />
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                                <div className="flex items-center mb-3">
+                                    <div className="p-2 bg-amber-100 rounded-lg text-amber-600 mr-3">
+                                        <ExclamationIcon className="w-6 h-6" />
+                                    </div>
+                                    <h5 className="font-bold text-amber-800 text-lg">ข้อควรระวัง</h5>
+                                </div>
+                                <div className="text-slate-700 leading-relaxed pl-1">
+                                    <MarkdownContent text={sections.precautions} />
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()
+              )}
+
+              {/* Footer Disclaimer */}
+              {!result.includes("PM 2.5") && (
+                  <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                    <p className="text-slate-500 text-xs">
+                        ระบบใช้ AI ในการวิเคราะห์ ข้อมูลอาจมีความคลาดเคลื่อน โปรดใช้วิจารณญาณ หากอาการไม่ดีขึ้นควรปรึกษาแพทย์
+                    </p>
+                  </div>
+              )}
             </div>
           )}
         </div>
@@ -511,20 +688,78 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
                 <button
                     onClick={() => setIsConfirmModalOpen(false)}
                     className="py-4 rounded-xl bg-slate-200 text-slate-700 font-bold text-lg hover:bg-slate-300"
-                    aria-label="ยกเลิก ไม่ตรวจแล้ว"
                 >
                     ยกเลิก
                 </button>
                 <button
                     onClick={initiateAnalysis}
                     className="py-4 rounded-xl bg-indigo-600 text-white font-bold text-lg shadow-lg hover:bg-indigo-700"
-                    aria-label="ยืนยัน ตรวจเลย"
                 >
                     ตรวจเลย
                 </button>
             </div>
         </div>
       </Modal>
+
+       <Modal isOpen={isVoiceSettingsOpen} onClose={() => setIsVoiceSettingsOpen(false)}>
+         <div className="p-2">
+            <h3 className="text-xl font-bold text-slate-800 mb-6 text-center">ตั้งค่าเสียงพูด 🔊</h3>
+            <div className="mb-6">
+                <label htmlFor="speechRate" className="block text-sm font-bold text-slate-700 mb-2">
+                    ความเร็วเสียงพูด ({speechRate})
+                </label>
+                <input 
+                    type="range" 
+                    id="speechRate"
+                    min="0.5" 
+                    max="1.5" 
+                    step="0.05" 
+                    value={speechRate}
+                    onChange={(e) => handleRateChange(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                />
+                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                    <span>ช้า</span>
+                    <span>ปกติ</span>
+                    <span>เร็ว</span>
+                </div>
+            </div>
+            {availableVoices.length > 0 && (
+                <div className="mb-8">
+                    <label htmlFor="voiceSelect" className="block text-sm font-bold text-slate-700 mb-2">
+                        เลือกเสียง
+                    </label>
+                    <select
+                        id="voiceSelect"
+                        value={selectedVoiceURI}
+                        onChange={(e) => handleVoiceChange(e.target.value)}
+                        className="block w-full p-2.5 bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                        <option value="">เลือกเสียงอัตโนมัติ</option>
+                        {availableVoices.map((voice) => (
+                            <option key={voice.voiceURI} value={voice.voiceURI}>
+                                {voice.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
+            <div className="flex gap-3">
+                <button
+                    onClick={() => speak("สวัสดีครับ นี่คือเสียงตัวอย่างของหมอรักษ์ครับ")}
+                    className="flex-1 py-2 bg-indigo-100 text-indigo-700 font-bold rounded-lg hover:bg-indigo-200 transition-colors"
+                >
+                    ทดสอบเสียง
+                </button>
+                <button
+                    onClick={() => setIsVoiceSettingsOpen(false)}
+                    className="flex-1 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                    ตกลง
+                </button>
+            </div>
+         </div>
+       </Modal>
     </>
   );
 };

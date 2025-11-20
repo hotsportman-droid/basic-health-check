@@ -150,7 +150,7 @@ const App: React.FC = () => {
               <div className="flex items-center space-x-3">
                 <StethoscopeIcon className="h-8 w-8 text-indigo-500" />
                 <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">
-                  ตรวจสุขภาพ
+                  สุขภาพดีกับหมอรักษ์
                 </h1>
               </div>
               <div className="flex items-center space-x-2">
@@ -184,18 +184,28 @@ const App: React.FC = () => {
 
         <main className="container mx-auto p-4 sm:p-6 lg:p-8">
           
-          {/* Hero Section */}
-          <section className="text-center py-8 md:py-12">
-              <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-full shadow-sm border border-indigo-100 animate-fade-in">
-                <span className="flex h-2 w-2 rounded-full bg-indigo-600 mr-2 animate-pulse"></span>
-                จำนวนผู้ใช้สะสม {totalUsage.toLocaleString()} ครั้ง
+          {/* Beautiful Banner Section */}
+          <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-blue-600 to-teal-500 text-white shadow-xl shadow-indigo-200 mb-10 p-8 md:p-16 text-center isolate transition-transform hover:scale-[1.01] duration-500">
+              {/* Decorative Background Elements */}
+              <div className="absolute top-0 left-0 -translate-x-1/4 -translate-y-1/4 w-96 h-96 bg-white opacity-10 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 w-96 h-96 bg-teal-400 opacity-20 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjwvc3ZnPg==')] [mask-image:radial-gradient(black,transparent_70%)] pointer-events-none"></div>
+
+              <div className="relative z-10 flex flex-col items-center">
+                <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 text-sm font-bold text-indigo-50 bg-white/10 backdrop-blur-md rounded-full border border-white/20 shadow-sm">
+                    <span className="flex h-2.5 w-2.5 rounded-full bg-teal-300 mr-2 animate-pulse shadow-[0_0_8px_rgba(94,234,212,0.6)]"></span>
+                    จำนวนผู้ใช้สะสม {totalUsage.toLocaleString()} ครั้ง
+                </div>
+                
+                <h2 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 drop-shadow-md leading-tight">
+                    สุขภาพดีเริ่มต้นที่<br/>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-white">การดูแลตัวเอง</span>
+                </h2>
+                
+                <p className="text-indigo-100 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed font-medium opacity-90">
+                    คู่มือตรวจเช็คสุขภาพอัจฉริยะพร้อม "หมอรักษ์" AI ที่จะช่วยวิเคราะห์และแนะนำการดูแลเบื้องต้น เพื่อความอุ่นใจของคุณและครอบครัว
+                </p>
               </div>
-              <h2 className="text-3xl md:text-5xl font-bold text-slate-800 tracking-tighter">
-                  คู่มือตรวจสุขภาพด้วยตนเอง
-              </h2>
-              <p className="mt-4 text-base md:text-lg text-slate-600 max-w-2xl mx-auto px-2">
-                  เครื่องมือและคำแนะนำเบื้องต้นสำหรับการสังเกตและตรวจสอบสุขภาพร่างกายของคุณง่ายๆ ที่บ้าน รองรับการใช้งานพร้อมกันหลักแสนคน
-              </p>
           </section>
 
           {/* Primary Tools Section */}
