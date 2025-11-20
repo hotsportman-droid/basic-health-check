@@ -1,25 +1,25 @@
+
 import React, { useState, useEffect } from 'react';
 import { HealthCheckCard } from './components/HealthCheckCard';
 import { BMICalculator } from './components/BMICalculator';
 import { NearbyHospitals } from './components/NearbyHospitals';
 import { HEALTH_CHECKS } from './constants';
-import { StethoscopeIcon, DownloadIcon, ShareIcon, ShareIcon as ShareIconSmall } from './components/icons';
+import { StethoscopeIcon, ShareIcon, ShareIcon as ShareIconSmall, QrCodeIcon } from './components/icons';
 import { ShareModal } from './components/ShareModal';
 import { Modal } from './components/Modal';
 import { DrRakAvatar } from './components/DrRakAvatar';
+import { QRCodeModal } from './components/QRCodeModal';
 
-// Simulated base count to match the 100k scenario
-const BASE_USAGE_COUNT = 102450;
-const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+// Simulated base count (Updated to 450)
+const BASE_FRIEND_COUNT = 450;
 
 const App: React.FC = () => {
   const [openAccordion, setOpenAccordion] = React.useState<string | null>('pulse-check');
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [totalUsage, setTotalUsage] = useState(BASE_USAGE_COUNT);
+  const [totalFriends, setTotalFriends] = useState(BASE_FRIEND_COUNT);
   const [activeUsers, setActiveUsers] = useState(842); // Simulate active users
   
   useEffect(() => {
@@ -35,83 +35,51 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Check if running in standalone mode (installed)
-    const checkStandalone = () => {
-      const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
-      setIsStandalone(isStandaloneMode);
-    };
-    
-    checkStandalone();
-    window.matchMedia('(display-mode: standalone)').addEventListener('change', checkStandalone);
-
     // Check if iOS
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
-    // Session Management & Usage Counting Logic
-    const handleSessionCount = () => {
-      const now = Date.now();
-      
+    // Friend Counting Logic: Add +1 only on first visit for this device
+    // Updated keys to 'v2' to reset count for existing users to the new base of 450
+    const handleFriendCount = () => {
       try {
-        // Wrap localStorage access in try-catch for Safari Private Mode
-        const lastActive = parseInt(localStorage.getItem('shc_last_active') || '0', 10);
-        let currentLocalCount = parseInt(localStorage.getItem('shc_total_usage') || '0', 10);
+        const isFriend = localStorage.getItem('dr_rak_is_friend_v2');
+        const storedCount = localStorage.getItem('dr_rak_friend_count_v2');
 
-        // Check if this is a new session:
-        // 1. No last active time recorded (First time user)
-        // 2. OR Time elapsed since last active > 30 minutes
-        if (!lastActive || (now - lastActive > SESSION_TIMEOUT)) {
-          currentLocalCount += 1;
-          localStorage.setItem('shc_total_usage', currentLocalCount.toString());
+        if (isFriend && storedCount) {
+            // User is already a friend, show their stored count
+            const count = Math.max(parseInt(storedCount), BASE_FRIEND_COUNT);
+            setTotalFriends(count);
+        } else {
+            // First time visiting this device (or after reset)
+            const newFriendCount = BASE_FRIEND_COUNT + 1;
+            
+            localStorage.setItem('dr_rak_is_friend_v2', 'true');
+            localStorage.setItem('dr_rak_friend_count_v2', newFriendCount.toString());
+            
+            setTotalFriends(newFriendCount);
         }
-
-        // Update state and timestamp
-        setTotalUsage(BASE_USAGE_COUNT + currentLocalCount);
-        localStorage.setItem('shc_last_active', now.toString());
       } catch (error) {
         console.warn('LocalStorage access denied (likely Safari Private Mode):', error);
-        // Fallback: just use base count + 1 for display in this session
-        setTotalUsage(BASE_USAGE_COUNT + 1);
+        // Fallback: just show Base + 1
+        setTotalFriends(BASE_FRIEND_COUNT + 1);
       }
     };
 
-    // 1. Run on initial load
-    handleSessionCount();
-
-    // 2. Run when app comes back to foreground (Visibility Change)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        handleSessionCount();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    handleFriendCount();
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      // We are not using the install prompt in UI anymore, but keeping the listener prevents automatic browser prompt
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.matchMedia('(display-mode: standalone)').removeEventListener('change', checkStandalone);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
-  const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to the install prompt: ${outcome}`);
-      setDeferredPrompt(null);
-    } else {
-      // If native prompt is not available (e.g. iOS or event not fired yet), show manual instructions
-      setIsInstallInstructionOpen(true);
-    }
-  };
 
   const handleShare = async () => {
     const shareData = {
@@ -174,16 +142,15 @@ const App: React.FC = () => {
                   <ShareIcon className="w-5 h-5" />
                   <span className="hidden md:inline">แชร์</span>
                 </button>
-                {!isStandalone && (
-                  <button
-                    onClick={handleInstallClick}
-                    className="flex items-center justify-center w-9 h-9 md:w-auto md:h-auto md:space-x-2 md:px-4 md:py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
-                    aria-label="ติดตั้งแอปพลิเคชัน"
-                  >
-                    <DownloadIcon className="w-5 h-5" />
-                    <span className="hidden md:inline">ติดตั้ง</span>
-                  </button>
-                )}
+                
+                <button
+                  onClick={() => setIsQRCodeModalOpen(true)}
+                  className="flex items-center justify-center w-9 h-9 md:w-auto md:h-auto md:space-x-2 md:px-4 md:py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
+                  aria-label="QR Code สำหรับเข้าใช้งาน"
+                >
+                  <QrCodeIcon className="w-5 h-5" />
+                  <span className="hidden md:inline">QR Code</span>
+                </button>
               </div>
             </div>
           </div>
@@ -200,8 +167,8 @@ const App: React.FC = () => {
 
               <div className="relative z-10 flex flex-col items-center">
                 <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 text-sm font-bold text-indigo-50 bg-white/10 backdrop-blur-md rounded-full border border-white/20 shadow-sm">
-                    <span className="flex h-2.5 w-2.5 rounded-full bg-teal-300 mr-2 animate-pulse shadow-[0_0_8px_rgba(94,234,212,0.6)]"></span>
-                    จำนวนผู้ใช้สะสม {totalUsage.toLocaleString()} ครั้ง
+                    <span className="flex h-2.5 w-2.5 rounded-full bg-pink-400 mr-2 animate-pulse shadow-[0_0_8px_rgba(244,114,182,0.6)]"></span>
+                    เพื่อนหมอรักษ์ {totalFriends.toLocaleString()} คน
                 </div>
                 
                 <h2 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 drop-shadow-md leading-tight">
@@ -288,8 +255,9 @@ const App: React.FC = () => {
         </footer>
       </div>
       <ShareModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
+      <QRCodeModal isOpen={isQRCodeModalOpen} onClose={() => setIsQRCodeModalOpen(false)} />
       
-      {/* Install Instruction Modal */}
+      {/* Install Instruction Modal - Kept for manual trigger fallback if needed, though currently unused via button */}
       <Modal isOpen={isInstallInstructionOpen} onClose={() => setIsInstallInstructionOpen(false)}>
          <div className="text-center p-2">
              <h3 className="text-xl font-bold text-slate-800 mb-4">

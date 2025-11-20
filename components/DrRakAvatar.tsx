@@ -336,11 +336,11 @@ export const DrRakAvatar: React.FC = () => {
             return;
         }
 
-        // Wrap Geolocation in a Promise with Timeout
+        // Wrap Geolocation in a Promise with Timeout and High Accuracy
         const getPosition = new Promise<GeolocationPosition>((resolve, reject) => {
             const timeoutId = setTimeout(() => {
                 reject(new Error("Geolocation timeout"));
-            }, 5000); // 5 seconds timeout
+            }, 10000); // Increased to 10 seconds for better GPS lock
 
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
@@ -350,6 +350,11 @@ export const DrRakAvatar: React.FC = () => {
                 (err) => {
                     clearTimeout(timeoutId);
                     reject(err);
+                },
+                {
+                    enableHighAccuracy: true, // Force GPS if available
+                    timeout: 10000,
+                    maximumAge: 0
                 }
             );
         });
@@ -360,13 +365,16 @@ export const DrRakAvatar: React.FC = () => {
             
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
-            // Explicit prompt to force Search Grounding usage
+            // Explicit prompt to force Search Grounding usage with Coordinates Context
             const prompt = `
-                Perform a Google Search to find the current weather and PM2.5 (Air Quality) at coordinates: Latitude ${latitude}, Longitude ${longitude}.
+                Context: The user is currently located at Latitude ${latitude}, Longitude ${longitude}.
                 
-                Then, strictly act as "Dr. Rak" (a kind female doctor) and generate a spoken response in Thai.
-                The response must follow this pattern:
-                "สวัสดีค่ะเพื่อนหมอรักษ์ [Current Weather & PM2.5 Report]. เพื่อนหมอรักษ์ เป็นอย่างไรบ้างคะ"
+                Task:
+                1. Perform a Google Search to find the *precise* current weather and PM2.5 (Air Quality) for this specific District/Province in Thailand.
+                2. Strictly act as "Dr. Rak" (a kind female doctor) and generate a spoken response in Thai.
+                
+                Response Pattern:
+                "สวัสดีค่ะเพื่อนหมอรักษ์ ขณะนี้ที่ [District/Province Name] อากาศ[Weather Description] ค่าฝุ่น [PM2.5 Status]. เพื่อนหมอรักษ์ เป็นอย่างไรบ้างคะ"
 
                 Keep it natural, caring, and short (under 3 sentences).
             `;
@@ -394,7 +402,8 @@ export const DrRakAvatar: React.FC = () => {
             }
 
         } catch (e) {
-            console.error("Greeting Error:", e);
+            console.warn("Greeting/Location Error:", e);
+            // Fail gracefully to fallback greeting without showing red error box
             fallbackGreeting();
         }
     };

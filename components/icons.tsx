@@ -105,6 +105,12 @@ export const DownloadIcon: React.FC<{ className?: string }> = ({ className }) =>
   </IconWrapper>
 );
 
+export const QrCodeIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <IconWrapper className={className}>
+    <path d="M12 4v1m6 11h2v-1c0-.55-.45-1-1-1h-1v2zm-2.66-1.21L14 12.41l.71.71 1.33-1.33-.71-.71-.71.71-1.28-1.29zm2.12-2.12l-.71-.71L14 11.59l.71.71 1.33-1.33-.71-.71-.71.71zM3 3h6v6H3V3zm2 2v2h2V5H5zm8-2h6v6h-6V3zm2 2v2h2V5h-2zM3 13h6v6H3v-6zm2 2v2h2v-2H5zm13-2h-2v2h2v-2zm-2 4h2v2h-2v-2zm2-4h2v2h-2v-2zm-4 2h2v2h-2v-2z"/>
+  </IconWrapper>
+);
+
 export const BloodDropIcon: React.FC<{ className?: string }> = ({ className }) => (
   <IconWrapper className={className}>
     <path d="M12 22a7 7 0 007-7c0-3.87-7-13-7-13s-7 9.13-7 13a7 7 0 007 7z"></path>
