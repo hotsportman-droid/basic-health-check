@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MicIcon, StopIcon, StethoscopeIcon, CheckCircleIcon, ExclamationIcon } from './icons';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
+import { Modal } from './Modal';
 
 // --- AUDIO HELPER FUNCTIONS ---
 function decode(base64: string): Uint8Array {
@@ -143,6 +144,7 @@ export const DrRakAvatar: React.FC = () => {
     const [transcript, setTranscript] = useState({ input: '', output: '' });
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
     const [micError, setMicError] = useState<string | null>(null);
+    const [isActivationModalOpen, setIsActivationModalOpen] = useState(false);
 
     const sessionPromiseRef = useRef<Promise<any> | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -343,7 +345,24 @@ export const DrRakAvatar: React.FC = () => {
         if (isSessionActive) {
             stopAllProcesses();
         } else {
+             if ((window as any).aistudio && !(await (window as any).aistudio.hasSelectedApiKey())) {
+                setIsActivationModalOpen(true);
+                return;
+            }
             await connectToDrRak();
+        }
+    };
+
+    const handleActivationConfirm = async () => {
+        setIsActivationModalOpen(false);
+        if ((window as any).aistudio) {
+            try {
+                await (window as any).aistudio.openSelectKey();
+                await connectToDrRak();
+            } catch (e) {
+                console.error("Could not open API key selection:", e);
+                setMicError("เกิดข้อผิดพลาดในการยืนยันตัวตนค่ะ");
+            }
         }
     };
     
@@ -359,69 +378,87 @@ export const DrRakAvatar: React.FC = () => {
     const sections = analysisResult ? parseAnalysisResult(analysisResult) : null;
 
     return (
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-indigo-50 p-6 flex flex-col items-center text-center max-w-lg mx-auto">
-            <div className="relative mb-4 w-32 h-32">
-                <DrRakImage isSpeaking={isSpeaking} />
-                {isSessionActive && !isSpeaking && (
-                     <div className="absolute inset-0 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin"></div>
+        <>
+            <div className="bg-white rounded-2xl shadow-lg border-2 border-indigo-50 p-6 flex flex-col items-center text-center max-w-lg mx-auto">
+                <div className="relative mb-4 w-32 h-32">
+                    <DrRakImage isSpeaking={isSpeaking} />
+                    {isSessionActive && !isSpeaking && (
+                        <div className="absolute inset-0 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin"></div>
+                    )}
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 mb-2">หมอรักษ์ชวนคุย</h3>
+                <p className="text-slate-600 text-sm min-h-[40px] flex items-center justify-center px-4 break-words">
+                    {displayTranscript()}
+                </p>
+
+                <button
+                    onClick={handleToggleSystem}
+                    className={`mt-4 rounded-full flex items-center justify-center w-16 h-16 transition-all duration-300 shadow-lg ${
+                        isSessionActive ? 'bg-red-500 text-white' : 'bg-indigo-600 text-white'
+                    }`}
+                    aria-label={isSessionActive ? "หยุดการสนทนา" : "เริ่มการสนทนา"}
+                >
+                    {isSessionActive ? <StopIcon className="w-8 h-8"/> : <MicIcon className="w-8 h-8" />}
+                </button>
+                {analysisResult && sections && (
+                    <div className="mt-6 w-full text-left animate-fade-in space-y-4" role="region" aria-label="ผลการวิเคราะห์">
+                        <h4 className="text-lg font-bold text-slate-800 flex items-center text-center justify-center">
+                            👩‍⚕️ ผลการวิเคราะห์จากหมอรักษ์
+                        </h4>
+                        <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
+                            <div className="flex items-center mb-3">
+                                <div className="p-2 bg-blue-100 rounded-lg text-blue-600 mr-3">
+                                    <StethoscopeIcon className="w-6 h-6" />
+                                </div>
+                                <h5 className="font-bold text-blue-800 text-lg">อาการที่ตรวจพบ</h5>
+                            </div>
+                            <div className="text-slate-700 leading-relaxed pl-1 text-sm">
+                                <MarkdownContent text={sections.symptoms} />
+                            </div>
+                        </div>
+
+                        <div className="bg-green-50 rounded-xl p-5 border border-green-100">
+                            <div className="flex items-center mb-3">
+                                <div className="p-2 bg-green-100 rounded-lg text-green-600 mr-3">
+                                    <CheckCircleIcon className="w-6 h-6" />
+                                </div>
+                                <h5 className="font-bold text-green-800 text-lg">คำแนะนำเบื้องต้น</h5>
+                            </div>
+                            <div className="text-slate-700 leading-relaxed pl-1 text-sm">
+                                <MarkdownContent text={sections.advice} />
+                            </div>
+                        </div>
+
+                        <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                            <div className="flex items-center mb-3">
+                                <div className="p-2 bg-amber-100 rounded-lg text-amber-600 mr-3">
+                                    <ExclamationIcon className="w-6 h-6" />
+                                </div>
+                                <h5 className="font-bold text-amber-800 text-lg">ข้อควรระวัง</h5>
+                            </div>
+                            <div className="text-slate-700 leading-relaxed pl-1 text-sm">
+                                <MarkdownContent text={sections.precautions} />
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">หมอรักษ์ชวนคุย</h3>
-            <p className="text-slate-600 text-sm min-h-[40px] flex items-center justify-center px-4 break-words">
-                {displayTranscript()}
-            </p>
-
-            <button
-                onClick={handleToggleSystem}
-                className={`mt-4 rounded-full flex items-center justify-center w-16 h-16 transition-all duration-300 shadow-lg ${
-                    isSessionActive ? 'bg-red-500 text-white' : 'bg-indigo-600 text-white'
-                }`}
-                aria-label={isSessionActive ? "หยุดการสนทนา" : "เริ่มการสนทนา"}
-            >
-                {isSessionActive ? <StopIcon className="w-8 h-8"/> : <MicIcon className="w-8 h-8" />}
-            </button>
-            {analysisResult && sections && (
-                <div className="mt-6 w-full text-left animate-fade-in space-y-4" role="region" aria-label="ผลการวิเคราะห์">
-                    <h4 className="text-lg font-bold text-slate-800 flex items-center text-center justify-center">
-                        👩‍⚕️ ผลการวิเคราะห์จากหมอรักษ์
-                    </h4>
-                    <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
-                        <div className="flex items-center mb-3">
-                            <div className="p-2 bg-blue-100 rounded-lg text-blue-600 mr-3">
-                                <StethoscopeIcon className="w-6 h-6" />
-                            </div>
-                            <h5 className="font-bold text-blue-800 text-lg">อาการที่ตรวจพบ</h5>
-                        </div>
-                        <div className="text-slate-700 leading-relaxed pl-1 text-sm">
-                            <MarkdownContent text={sections.symptoms} />
-                        </div>
-                    </div>
-
-                    <div className="bg-green-50 rounded-xl p-5 border border-green-100">
-                        <div className="flex items-center mb-3">
-                            <div className="p-2 bg-green-100 rounded-lg text-green-600 mr-3">
-                                <CheckCircleIcon className="w-6 h-6" />
-                            </div>
-                            <h5 className="font-bold text-green-800 text-lg">คำแนะนำเบื้องต้น</h5>
-                        </div>
-                        <div className="text-slate-700 leading-relaxed pl-1 text-sm">
-                            <MarkdownContent text={sections.advice} />
-                        </div>
-                    </div>
-
-                    <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
-                        <div className="flex items-center mb-3">
-                            <div className="p-2 bg-amber-100 rounded-lg text-amber-600 mr-3">
-                                <ExclamationIcon className="w-6 h-6" />
-                            </div>
-                            <h5 className="font-bold text-amber-800 text-lg">ข้อควรระวัง</h5>
-                        </div>
-                        <div className="text-slate-700 leading-relaxed pl-1 text-sm">
-                            <MarkdownContent text={sections.precautions} />
-                        </div>
-                    </div>
+            <Modal isOpen={isActivationModalOpen} onClose={() => setIsActivationModalOpen(false)}>
+                <div className="text-center p-2">
+                    <h3 className="text-xl font-bold text-slate-800 mb-4">
+                        เริ่มต้นใช้งานหมอรักษ์
+                    </h3>
+                    <p className="text-slate-600 text-sm mb-6">
+                        เพื่อความปลอดภัยในการเชื่อมต่อ โปรดยืนยันตัวตนเพื่อเริ่มการสนทนาค่ะ (ขั้นตอนนี้ทำเพียงครั้งแรกเท่านั้น)
+                    </p>
+                    <button
+                        onClick={handleActivationConfirm}
+                        className="w-full bg-indigo-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                    >
+                        ยืนยันและเริ่มคุย
+                    </button>
                 </div>
-            )}
-        </div>
+            </Modal>
+        </>
     );
 };
