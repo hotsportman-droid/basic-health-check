@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HealthCheckCard } from './components/HealthCheckCard';
 import { BMICalculator } from './components/BMICalculator';
 import { NearbyHospitals } from './components/NearbyHospitals';
@@ -12,9 +12,9 @@ import { QRCodeModal } from './components/QRCodeModal';
 
 // Base friend count
 const BASE_FRIEND_COUNT = 450;
-// Public Counter API Namespace (Unique ID for this app)
-const COUNTER_NAMESPACE = 'dr-rak-health-app-production';
-const COUNTER_KEY = 'friend_count_v1';
+// Use a specific, unique namespace to avoid collisions
+const COUNTER_NAMESPACE = 'dr-rak-official-counter-2024';
+const COUNTER_KEY = 'visits';
 
 const App: React.FC = () => {
   const [openAccordion, setOpenAccordion] = React.useState<string | null>('pulse-check');
@@ -22,50 +22,60 @@ const App: React.FC = () => {
   const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [totalFriends, setTotalFriends] = useState(BASE_FRIEND_COUNT + 1); // Default fallback
+  const [totalFriends, setTotalFriends] = useState(BASE_FRIEND_COUNT + 1); 
   
+  // Prevent double-firing in React Strict Mode
+  const effectRan = useRef(false);
+
   useEffect(() => {
     // Check if iOS
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
-    // --- REAL ORGANIC COUNTING LOGIC (A = A + 1) ---
+    // --- REAL ORGANIC COUNTING LOGIC (Machine A = 451, Machine B = 452) ---
     const updateFriendCount = async () => {
+      if (effectRan.current) return;
+      effectRan.current = true;
+
       try {
-        // Check if this device is already a "friend"
-        const isFriend = localStorage.getItem('dr_rak_is_friend_registered');
+        // Unique LocalStorage Key for this version
+        const storageKey = `dr_rak_registered_${COUNTER_NAMESPACE}`;
+        const isRegistered = localStorage.getItem(storageKey);
+        
         let countValue = 0;
 
-        if (!isFriend) {
-          // CASE: New Device (Machine 2, 3, ...)
-          // Action: HIT the server to increment global count by 1
-          const response = await fetch(`https://api.countapi.xyz/hit/${COUNTER_NAMESPACE}/${COUNTER_KEY}`);
+        if (!isRegistered) {
+          // CASE: New Device -> Hit (Increment)
+          // Switch to api.counterapi.dev as countapi.xyz is defunct
+          // Endpoint: /up increments the counter
+          const response = await fetch(`https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up`);
           const data = await response.json();
           
-          if (data.value) {
-            countValue = data.value;
-            // Mark this device as counted
-            localStorage.setItem('dr_rak_is_friend_registered', 'true');
+          // counterapi.dev returns { "count": number }
+          if (data && typeof data.count === 'number') {
+            countValue = data.count;
+            localStorage.setItem(storageKey, 'true');
+            console.log("New Device Registered. Count:", countValue);
           }
         } else {
-          // CASE: Existing Device (Machine 1 returning)
-          // Action: GET the current global count without incrementing
-          const response = await fetch(`https://api.countapi.xyz/get/${COUNTER_NAMESPACE}/${COUNTER_KEY}`);
+          // CASE: Existing Device -> Get (Fetch current)
+          // Endpoint: / returns current count without incrementing
+          const response = await fetch(`https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}`);
           const data = await response.json();
           
-          if (data.value) {
-            countValue = data.value;
+          if (data && typeof data.count === 'number') {
+            countValue = data.count;
+            console.log("Existing Device. Current Count:", countValue);
           }
         }
 
-        // Update UI: Base (450) + Global Organic Count
+        // Update State: Base + API Value
         if (countValue > 0) {
           setTotalFriends(BASE_FRIEND_COUNT + countValue);
         }
       } catch (error) {
-        console.warn("Counter API Error (Using fallback):", error);
-        // Fallback: If API fails (offline/blocked), show Base + 1 (At least count myself)
-        setTotalFriends(BASE_FRIEND_COUNT + 1);
+        console.error("Counter API Error:", error);
+        // Fallback: Keep default (Base + 1) if offline or blocked
       }
     };
 
