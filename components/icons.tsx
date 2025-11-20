@@ -61,14 +61,6 @@ export const MouthIcon: React.FC<{ className?: string }> = ({ className }) => (
   </IconWrapper>
 );
 
-export const BrainIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <IconWrapper className={className}>
-    <path d="M9.5 2.5a2.5 2.5 0 013 0M6.5 6a2.5 2.5 0 003 0M14.5 6a2.5 2.5 0 003 0M18 10a2.5 2.5 0 000-5M6 10a2.5 2.5 0 010-5M12 10a2.5 2.5 0 01-3-2.5M12 10a2.5 2.5 0 003-2.5"></path>
-    <path d="M4.5 10.5c-1.5 0-3 1.5-3 3.5s1.5 3.5 3 3.5h15c1.5 0 3-1.5 3-3.5s-1.5-3.5-3-3.5a9.1 9.1 0 00-6.1-3.4M4.5 10.5a9.1 9.1 0 016.1-3.4"></path>
-    <path d="M12 14a2.5 2.5 0 00-3 2.5M12 14a2.5 2.5 0 013 2.5"></path>
-  </IconWrapper>
-);
-
 export const MapPinIcon: React.FC<{ className?: string }> = ({ className }) => (
     <IconWrapper className={className}>
       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"></path>
@@ -76,12 +68,6 @@ export const MapPinIcon: React.FC<{ className?: string }> = ({ className }) => (
     </IconWrapper>
   );
   
-export const NavigationIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <IconWrapper className={className}>
-      <path d="M3 11l19-9-9 19-2-8-8-2z"></path>
-    </IconWrapper>
-);
-
 export const ChevronDownIcon: React.FC<{ className?: string }> = ({ className }) => (
   <IconWrapper className={className}>
     <path d="M19 9l-7 7-7-7"></path>
@@ -169,28 +155,9 @@ export const LinkIcon: React.FC<{ className?: string }> = ({ className }) => (
   </IconWrapper>
 );
 
-export const MicIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <IconWrapper className={className}>
-    <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
-  </IconWrapper>
-);
-
 export const SpeakerWaveIcon: React.FC<{ className?: string }> = ({ className }) => (
   <IconWrapper className={className}>
     <path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
-  </IconWrapper>
-);
-
-export const StopIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <IconWrapper className={className}>
-    <rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>
-  </IconWrapper>
-);
-
-export const SettingsIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <IconWrapper className={className}>
-    <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
   </IconWrapper>
 );
 
