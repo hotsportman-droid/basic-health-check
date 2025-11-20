@@ -10,8 +10,11 @@ import { Modal } from './components/Modal';
 import { DrRakAvatar } from './components/DrRakAvatar';
 import { QRCodeModal } from './components/QRCodeModal';
 
-// Simulated base count (Started at 450)
+// Base friend count
 const BASE_FRIEND_COUNT = 450;
+// Public Counter API Namespace (Unique ID for this app)
+const COUNTER_NAMESPACE = 'dr-rak-health-app-production';
+const COUNTER_KEY = 'friend_count_v1';
 
 const App: React.FC = () => {
   const [openAccordion, setOpenAccordion] = React.useState<string | null>('pulse-check');
@@ -19,54 +22,54 @@ const App: React.FC = () => {
   const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [totalFriends, setTotalFriends] = useState(BASE_FRIEND_COUNT);
-  const [activeUsers, setActiveUsers] = useState(842); // Simulate active users
+  const [totalFriends, setTotalFriends] = useState(BASE_FRIEND_COUNT + 1); // Default fallback
   
-  useEffect(() => {
-    // Simulate active users fluctuation
-    const interval = setInterval(() => {
-      setActiveUsers(prev => {
-        const change = Math.floor(Math.random() * 15) - 7; // -7 to +7
-        return Math.max(500, prev + change);
-      });
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   useEffect(() => {
     // Check if iOS
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
-    // Friend Counting Logic:
-    // "เมื่อเครื่องนั้นเข้าใช้ครั้งแรก ให้ บวก 1 เสมอ"
-    // Interpretation: The visible count is the Base Count + 1 (The current user).
-    // This allows the "accumulation" to be controlled by the Base Count growing over time,
-    // while ensuring the user always feels counted as "+1".
-    
-    const handleFriendCount = () => {
+    // --- REAL ORGANIC COUNTING LOGIC (A = A + 1) ---
+    const updateFriendCount = async () => {
       try {
-        // We check localStorage to simulate the "First Time" registration event
-        // Key updated to 'v3' to ensure fresh logic applies to all devices
-        const isFriend = localStorage.getItem('dr_rak_is_friend_v3');
-
-        // Regardless of whether they were already a friend or not, 
-        // the logic "Always add 1 for this device" means we show Base + 1.
-        setTotalFriends(BASE_FRIEND_COUNT + 1);
+        // Check if this device is already a "friend"
+        const isFriend = localStorage.getItem('dr_rak_is_friend_registered');
+        let countValue = 0;
 
         if (!isFriend) {
-            // Mark this device as having joined the community
-            localStorage.setItem('dr_rak_is_friend_v3', 'true');
+          // CASE: New Device (Machine 2, 3, ...)
+          // Action: HIT the server to increment global count by 1
+          const response = await fetch(`https://api.countapi.xyz/hit/${COUNTER_NAMESPACE}/${COUNTER_KEY}`);
+          const data = await response.json();
+          
+          if (data.value) {
+            countValue = data.value;
+            // Mark this device as counted
+            localStorage.setItem('dr_rak_is_friend_registered', 'true');
+          }
+        } else {
+          // CASE: Existing Device (Machine 1 returning)
+          // Action: GET the current global count without incrementing
+          const response = await fetch(`https://api.countapi.xyz/get/${COUNTER_NAMESPACE}/${COUNTER_KEY}`);
+          const data = await response.json();
+          
+          if (data.value) {
+            countValue = data.value;
+          }
+        }
+
+        // Update UI: Base (450) + Global Organic Count
+        if (countValue > 0) {
+          setTotalFriends(BASE_FRIEND_COUNT + countValue);
         }
       } catch (error) {
-        console.warn('LocalStorage access denied:', error);
-        // Fallback: Still show Base + 1
+        console.warn("Counter API Error (Using fallback):", error);
+        // Fallback: If API fails (offline/blocked), show Base + 1 (At least count myself)
         setTotalFriends(BASE_FRIEND_COUNT + 1);
       }
     };
 
-    handleFriendCount();
+    updateFriendCount();
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -128,10 +131,6 @@ const App: React.FC = () => {
                 </h1>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="hidden lg:flex items-center bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-medium">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
-                    {activeUsers.toLocaleString()} ใช้งานอยู่
-                </div>
                 
                 <button
                   onClick={handleShare}
