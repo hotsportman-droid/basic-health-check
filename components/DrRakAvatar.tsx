@@ -142,6 +142,7 @@ export const DrRakAvatar: React.FC = () => {
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [transcript, setTranscript] = useState({ input: '', output: '' });
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+    const [micError, setMicError] = useState<string | null>(null);
 
     const sessionPromiseRef = useRef<Promise<any> | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -152,6 +153,10 @@ export const DrRakAvatar: React.FC = () => {
     const nextStartTimeRef = useRef(0);
     const currentInputTranscriptRef = useRef('');
     const currentOutputTranscriptRef = useRef('');
+
+    useEffect(() => {
+        return () => stopAllProcesses();
+    }, []);
 
     const stopAllProcesses = () => {
         if (sessionPromiseRef.current) {
@@ -170,15 +175,11 @@ export const DrRakAvatar: React.FC = () => {
         setIsSpeaking(false);
         setStatusText('แตะปุ่มไมค์เพื่อเริ่มคุยค่ะ');
         setTranscript({ input: '', output: '' });
-        setAnalysisResult(null); 
+        setAnalysisResult(null);
+        setMicError(null);
     };
 
-    const handleToggleSystem = async () => {
-        if (isSessionActive) {
-            stopAllProcesses();
-            return;
-        }
-
+    const connectToDrRak = async () => {
         setIsSessionActive(true);
         setStatusText('กำลังขออนุญาตใช้ไมโครโฟน...');
         currentInputTranscriptRef.current = '';
@@ -187,12 +188,10 @@ export const DrRakAvatar: React.FC = () => {
         setAnalysisResult(null);
 
         try {
-            // Step 1: Get microphone stream first
             streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
             setStatusText('กำลังเชื่อมต่อกับหมอรักษ์...');
 
-            // Step 2: Initialize Audio Contexts
             if (!inputAudioContextRef.current) {
                 const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
                 inputAudioContextRef.current = new AudioContext({ sampleRate: 16000 });
@@ -209,7 +208,6 @@ export const DrRakAvatar: React.FC = () => {
                 outputAudioContextRef.current.resume();
             }
             
-            // Step 3: Connect to Gemini Live API
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
             sessionPromiseRef.current = ai.live.connect({
                 model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -306,7 +304,7 @@ export const DrRakAvatar: React.FC = () => {
                     },
                     onerror: (e: ErrorEvent) => {
                         console.error('Live API Error:', e);
-                        setStatusText('เกิดข้อผิดพลาดในการเชื่อมต่อค่ะ');
+                        setStatusText('การเชื่อมต่อล้มเหลว กรุณาลองใหม่อีกครั้งค่ะ');
                         stopAllProcesses();
                     },
                     onclose: (e: CloseEvent) => {
@@ -316,16 +314,43 @@ export const DrRakAvatar: React.FC = () => {
             });
         } catch (error) {
             console.error("Failed to start session:", error);
-            setStatusText('ไม่สามารถเข้าถึงไมโครโฟนได้ค่ะ');
+            let errorMessage = 'ไม่สามารถเริ่มการสนทนาได้ค่ะ';
+            if (error instanceof DOMException) {
+                switch(error.name) {
+                    case 'NotFoundError':
+                    case 'DevicesNotFoundError':
+                        errorMessage = 'ไม่พบไมโครโฟนในอุปกรณ์นี้ค่ะ กรุณาตรวจสอบการเชื่อมต่อ';
+                        break;
+                    case 'NotAllowedError':
+                    case 'PermissionDeniedError':
+                        errorMessage = 'คุณต้องอนุญาตให้แอปใช้ไมโครโฟนในการตั้งค่าเบราว์เซอร์ค่ะ';
+                        break;
+                    case 'NotReadableError':
+                        errorMessage = 'ไมโครโฟนอาจมีปัญหาหรือถูกใช้งานโดยแอปอื่นอยู่ค่ะ';
+                        break;
+                    default:
+                        errorMessage = 'เกิดข้อผิดพลาดในการเข้าถึงไมโครโฟนค่ะ';
+                }
+            }
+            setMicError(errorMessage);
+            setIsSessionActive(false);
+            setStatusText('แตะปุ่มไมค์เพื่อเริ่มคุยค่ะ');
+        }
+    }
+
+    const handleToggleSystem = async () => {
+        setMicError(null);
+        if (isSessionActive) {
             stopAllProcesses();
+        } else {
+            await connectToDrRak();
         }
     };
     
-    useEffect(() => {
-        return () => stopAllProcesses();
-    }, []);
-
     const displayTranscript = () => {
+        if (micError) {
+            return <span className="text-red-600 font-semibold">{micError}</span>
+        }
         if(transcript.output) return `หมอรักษ์: ${transcript.output}`;
         if(transcript.input) return `คุณ: ${transcript.input}`;
         return statusText;
@@ -345,6 +370,7 @@ export const DrRakAvatar: React.FC = () => {
             <p className="text-slate-600 text-sm min-h-[40px] flex items-center justify-center px-4 break-words">
                 {displayTranscript()}
             </p>
+
             <button
                 onClick={handleToggleSystem}
                 className={`mt-4 rounded-full flex items-center justify-center w-16 h-16 transition-all duration-300 shadow-lg ${
