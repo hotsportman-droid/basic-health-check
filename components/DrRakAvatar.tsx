@@ -1,92 +1,9 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MicIcon, StopIcon, StethoscopeIcon, CheckCircleIcon, ExclamationIcon } from './icons';
-import { GoogleGenAI, Modality, Type } from "@google/genai";
-import type { LiveServerMessage, FunctionDeclaration } from "@google/genai";
-
-// --- TYPES ---
-interface AnalysisData {
-  symptoms: string;
-  advice: string;
-  precautions: string;
-}
-
-// --- AUDIO HELPERS ---
-function createBlob(data: Float32Array): { data: string; mimeType: string } {
-  const l = data.length;
-  const int16 = new Int16Array(l);
-  for (let i = 0; i < l; i++) {
-    int16[i] = data[i] * 32768;
-  }
-  const bytes = new Uint8Array(int16.buffer);
-  let binary = '';
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  const base64 = btoa(binary);
-  
-  return {
-    data: base64,
-    mimeType: 'audio/pcm;rate=16000',
-  };
-}
-
-function decodeAudio(base64: string) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function decodeAudioData(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number,
-  numChannels: number,
-): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-    }
-  }
-  return buffer;
-}
+import React, { useState, useEffect } from 'react';
+import { StethoscopeIcon, CheckCircleIcon, ExclamationIcon, SpeakerWaveIcon } from './icons';
+import { GoogleGenAI } from "@google/genai";
 
 // --- UI HELPERS ---
-const MarkdownContent = ({ text }: { text: string }) => {
-    if (!text) return <p className="text-slate-400 italic">ไม่มีข้อมูล</p>;
-    const lines = text.split('\n').filter(line => line.trim() !== '');
-    const elements: React.ReactNode[] = [];
-    let currentList: React.ReactNode[] = [];
-
-    lines.forEach((line, idx) => {
-        const cleanLine = line.trim();
-        if (cleanLine.startsWith('-') || cleanLine.startsWith('*')) {
-             const content = cleanLine.replace(/^[\-\*]\s?/, '');
-             currentList.push(<li key={`li-${idx}`} className="mb-1">{content}</li>);
-        } else {
-             if (currentList.length > 0) {
-                 elements.push(<ul key={`ul-${idx}`} className="list-disc pl-5 mb-3 space-y-1">{[...currentList]}</ul>);
-                 currentList = [];
-             }
-             elements.push(<p key={`p-${idx}`} className="mb-2">{cleanLine}</p>);
-        }
-    });
-    if (currentList.length > 0) {
-        elements.push(<ul key={`ul-end`} className="list-disc pl-5 mb-3 space-y-1">{[...currentList]}</ul>);
-    }
-    return <>{elements}</>;
-};
-
 const DrRakImage = ({ isSpeaking }: { isSpeaking: boolean }) => (
   <svg viewBox="0 0 400 400" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
      <defs>
@@ -118,7 +35,7 @@ const DrRakImage = ({ isSpeaking }: { isSpeaking: boolean }) => (
       <path d="M185 240 Q200 250 215 240" stroke="#D84315" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
       <path d="M150 310 C150 370 250 370 250 310" stroke="#475569" strokeWidth="5" fill="none" strokeLinecap="round"/>
       <circle cx="200" cy="370" r="14" fill="#94A3B8" stroke="#334155" strokeWidth="2"/>
-      {/* Animated mouth for speaking */}
+      {/* Mouth animation */}
       {isSpeaking && (
         <ellipse cx="200" cy="250" rx="10" ry="5" fill="#D84315" opacity="0.6" className="animate-pulse" />
       )}
@@ -126,274 +43,247 @@ const DrRakImage = ({ isSpeaking }: { isSpeaking: boolean }) => (
   </svg>
 );
 
-const analysisTool: FunctionDeclaration = {
-  name: 'updateAnalysis',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      symptoms: { type: Type.STRING, description: "List of symptoms detected from user's description" },
-      advice: { type: Type.STRING, description: "Initial health advice based on symptoms" },
-      precautions: { type: Type.STRING, description: "Warning signs or precautions to take" }
-    },
-    required: ['symptoms', 'advice', 'precautions']
-  }
+const MarkdownContent = ({ text }: { text: string }) => {
+    if (!text || text === '-') return <p className="text-slate-400 italic">ไม่มีข้อมูล</p>;
+    return (
+      <div className="space-y-2">
+        {text.split('\n').map((line, i) => {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('-')) return <div key={i} className="flex items-start"><span className="mr-2 text-indigo-500 mt-1.5">•</span><p className="flex-1 leading-relaxed">{trimmed.substring(1)}</p></div>;
+            if (trimmed) return <p key={i} className="leading-relaxed">{trimmed}</p>;
+            return null;
+        })}
+      </div>
+    );
 };
 
+interface AnalysisResult {
+    symptoms: string;
+    advice: string;
+    precautions: string;
+    speechText: string;
+}
+
 export const DrRakAvatar: React.FC = () => {
-    const [isConnected, setIsConnected] = useState(false);
+    const [inputText, setInputText] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const [analysisResult, setAnalysisResult] = useState<AnalysisData | null>(null);
+    const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     
-    const nextStartTimeRef = useRef<number>(0);
-    const inputAudioContextRef = useRef<AudioContext | null>(null);
-    const outputAudioContextRef = useRef<AudioContext | null>(null);
-    const sessionRef = useRef<any>(null);
-    const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-
-    const disconnect = useCallback(() => {
-      if (sessionRef.current) {
-        // We cannot explicitly close the session object in the current SDK version easily if not exposed,
-        // but we can stop our processing.
-        sessionRef.current = null;
-      }
-      
-      if (inputAudioContextRef.current) {
-        inputAudioContextRef.current.close();
-        inputAudioContextRef.current = null;
-      }
-      
-      if (outputAudioContextRef.current) {
-        outputAudioContextRef.current.close();
-        outputAudioContextRef.current = null;
-      }
-      
-      sourcesRef.current.forEach(source => source.stop());
-      sourcesRef.current.clear();
-      
-      setIsConnected(false);
-      setIsSpeaking(false);
-      nextStartTimeRef.current = 0;
+    // Cancel speech when component unmounts
+    useEffect(() => {
+        return () => {
+            window.speechSynthesis.cancel();
+        };
     }, []);
 
-    const connect = async () => {
-      setError(null);
-      setAnalysisResult(null);
-
-      try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const speak = (text: string) => {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'th-TH';
+        utterance.rate = 1.0;
         
-        // Setup Audio Contexts
-        const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-        const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        inputAudioContextRef.current = inputCtx;
-        outputAudioContextRef.current = outputCtx;
+        // Try to find a Thai voice
+        const voices = window.speechSynthesis.getVoices();
+        const thaiVoice = voices.find(v => v.lang.includes('th'));
+        if (thaiVoice) utterance.voice = thaiVoice;
 
-        // Get Microphone Stream
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        // Connect to Live API
-        const sessionPromise = ai.live.connect({
-          model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-          callbacks: {
-            onopen: () => {
-              setIsConnected(true);
-              
-              // Setup Audio Input Processing
-              const source = inputCtx.createMediaStreamSource(stream);
-              const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
-              
-              scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                const pcmBlob = createBlob(inputData);
-                
-                sessionPromise.then((session) => {
-                  if (isConnected) { // Double check connection state
-                    session.sendRealtimeInput({ media: pcmBlob });
-                  }
-                });
-              };
-              
-              source.connect(scriptProcessor);
-              scriptProcessor.connect(inputCtx.destination);
-            },
-            onmessage: async (message: LiveServerMessage) => {
-              // Handle Tool Calls
-              if (message.toolCall) {
-                for (const fc of message.toolCall.functionCalls) {
-                  if (fc.name === 'updateAnalysis') {
-                    const args = fc.args as unknown as AnalysisData;
-                    setAnalysisResult(args);
-                    
-                    // Send success response
-                    sessionPromise.then((session) => {
-                       session.sendToolResponse({
-                        functionResponses: {
-                          id: fc.id,
-                          name: fc.name,
-                          response: { result: "Analysis updated on screen." }
-                        }
-                       });
-                    });
-                  }
-                }
-              }
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
 
-              // Handle Audio Output
-              const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-              if (base64Audio && outputCtx) {
-                setIsSpeaking(true);
-                
-                // Sync timing
-                const currentTime = outputCtx.currentTime;
-                let startTime = nextStartTimeRef.current;
-                if (startTime < currentTime) startTime = currentTime;
-                
-                const audioBuffer = await decodeAudioData(
-                  decodeAudio(base64Audio),
-                  outputCtx,
-                  24000,
-                  1
-                );
-                
-                const source = outputCtx.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(outputCtx.destination);
-                
-                source.addEventListener('ended', () => {
-                   sourcesRef.current.delete(source);
-                   if (sourcesRef.current.size === 0) {
-                     setIsSpeaking(false);
-                   }
-                });
-                
-                source.start(startTime);
-                nextStartTimeRef.current = startTime + audioBuffer.duration;
-                sourcesRef.current.add(source);
-              }
-
-              // Handle Interruption
-              if (message.serverContent?.interrupted) {
-                 sourcesRef.current.forEach(s => s.stop());
-                 sourcesRef.current.clear();
-                 nextStartTimeRef.current = 0;
-                 setIsSpeaking(false);
-              }
-            },
-            onclose: () => {
-              disconnect();
-            },
-            onerror: (err) => {
-              console.error("Live API Error:", err);
-              setError("เกิดข้อผิดพลาดในการเชื่อมต่อ");
-              disconnect();
-            }
-          },
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
-            },
-            systemInstruction: `คุณคือ "หมอรักษ์" แพทย์ผู้ช่วย AI
-            - หน้าที่: รับฟังอาการและให้คำแนะนำสุขภาพเบื้องต้นด้วยน้ำเสียงที่อบอุ่นและเป็นกันเอง
-            - การตอบโต้: 
-              1. หากผู้ใช้ปรึกษาอาการป่วย: คุณต้องเรียกใช้เครื่องมือ 'updateAnalysis' เพื่อแสดงข้อมูลบนหน้าจอ และพูดสรุปคำแนะนำสั้นๆ ให้กำลังใจผู้ป่วย ไม่ต้องอ่านรายละเอียดทั้งหมดในเครื่องมือ
-              2. หากเป็นการพูดคุยทั่วไป: พูดคุยโต้ตอบตามปกติ
-            - ห้ามวินิจฉัยโรคหรือสั่งยาเด็ดขาด ให้แนะนำพบแพทย์หากอาการรุนแรง`,
-            tools: [{ functionDeclarations: [analysisTool] }]
-          }
-        });
-        
-        sessionRef.current = sessionPromise;
-
-      } catch (e: any) {
-        console.error("Connection failed", e);
-        setError("ไม่สามารถเข้าถึงไมโครโฟนหรือเชื่อมต่อได้");
-        disconnect();
-      }
+        window.speechSynthesis.speak(utterance);
     };
 
-    // Cleanup on unmount
-    useEffect(() => {
-      return () => {
-        disconnect();
-      };
-    }, [disconnect]);
+    const handleAnalyze = async () => {
+        if (!inputText.trim()) return;
 
-    const toggleConnection = () => {
-      if (isConnected) {
-        disconnect();
-      } else {
-        connect();
-      }
+        setIsProcessing(true);
+        setAnalysis(null);
+        setError(null);
+        window.speechSynthesis.cancel(); // Stop any existing speech
+        
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: inputText,
+                config: {
+                    systemInstruction: `คุณคือ "หมอรักษ์" แพทย์ผู้ช่วย AI ที่มีความเชี่ยวชาญสูง
+                    - บุคลิก: สุภาพ อบอุ่น มีความเห็นอกเห็นใจ และให้ข้อมูลที่ละเอียดชัดเจน
+                    - หน้าที่: ให้คำแนะนำสุขภาพเบื้องต้นจากอาการที่ผู้ใช้ระบุ (ห้ามวินิจฉัยโรค/จ่ายยา)
+                    - สำคัญ: การวิเคราะห์ต้อง "ละเอียด" และ "ครอบคลุม" ไม่ตอบสั้นห้วนๆ
+                    
+                    ให้ตอบกลับในรูปแบบ XML ดังนี้:
+                      <response>
+                        <speech>ข้อความสำหรับพูดตอบกลับสั้นๆ เพื่อให้กำลังใจ (ความยาว 1-2 ประโยค)</speech>
+                        <analysis>
+                           <symptoms>
+                             สรุปอาการที่จับใจความได้ พร้อมอธิบายสั้นๆ ว่าอาจเกิดจากสาเหตุใดได้บ้าง (ในภาษาชาวบ้านที่เข้าใจง่าย) ใช้ bullet point (-) ในการแยกประเด็น
+                           </symptoms>
+                           <advice>
+                             คำแนะนำการดูแลตัวเองที่ "ละเอียดและปฏิบัติได้จริง" อย่างน้อย 5-6 ข้อ (ครอบคลุมเรื่องอาหารการกิน, การพักผ่อน, ท่าทาง, หรือการประคบเย็น/ร้อน ถ้าจำเป็น) ใช้ bullet point (-)
+                           </advice>
+                           <precautions>
+                             ระบุสัญญาณอันตราย (Red Flags) ที่บ่งบอกว่าต้องไปพบแพทย์ทันที หรืออาการแทรกซ้อนที่ต้องระวัง
+                           </precautions>
+                        </analysis>
+                      </response>`
+                }
+            });
+
+            const text = response.text || "";
+            
+            // Parse XML-like response
+            const speechMatch = text.match(/<speech>([\s\S]*?)<\/speech>/);
+            const symptomsMatch = text.match(/<symptoms>([\s\S]*?)<\/symptoms>/);
+            const adviceMatch = text.match(/<advice>([\s\S]*?)<\/advice>/);
+            const precautionsMatch = text.match(/<precautions>([\s\S]*?)<\/precautions>/);
+
+            const speechText = speechMatch ? speechMatch[1].trim() : text.replace(/<[^>]*>/g, '').trim();
+            
+            if (symptomsMatch || adviceMatch) {
+                setAnalysis({
+                    symptoms: symptomsMatch ? symptomsMatch[1].trim() : '-',
+                    advice: adviceMatch ? adviceMatch[1].trim() : '-',
+                    precautions: precautionsMatch ? precautionsMatch[1].trim() : '-',
+                    speechText
+                });
+            } else {
+                 // Fallback logic if XML parsing fails but we have text
+                 setAnalysis({
+                     symptoms: '-',
+                     advice: text,
+                     precautions: '-',
+                     speechText: text
+                 });
+            }
+
+            // Auto-speak the summary
+            speak(speechText);
+
+        } catch (err) {
+            console.error("AI Error:", err);
+            setError("เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง");
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     return (
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-indigo-50 p-6 flex flex-col items-center text-center max-w-lg mx-auto">
-            <div className="relative mb-4 w-32 h-32">
-                <DrRakImage isSpeaking={isSpeaking} />
-                {isConnected && !isSpeaking && (
-                    <div className="absolute inset-0 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin opacity-30"></div>
-                )}
-            </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">หมอรักษ์ (Live)</h3>
-            <p className="text-slate-600 text-sm min-h-[24px] mb-4">
-                {error ? <span className="text-red-500">{error}</span> : 
-                 isConnected ? (isSpeaking ? "กำลังพูด..." : "กำลังฟังคุณอยู่ค่ะ...") : 
-                 "แตะปุ่มไมค์เพื่อเริ่มสนทนาสด"}
-            </p>
+        <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 p-6 flex flex-col items-center text-center max-w-2xl mx-auto relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-400 via-blue-500 to-teal-400"></div>
+            
+            <div className="flex flex-col md:flex-row items-start w-full gap-6">
+                {/* Left: Avatar */}
+                <div className="w-full md:w-1/3 flex flex-col items-center">
+                     <div className="relative w-32 h-32 mb-4">
+                        <DrRakImage isSpeaking={isSpeaking} />
+                        {isProcessing && (
+                            <div className="absolute inset-0 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin opacity-50"></div>
+                        )}
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800">ปรึกษาหมอรักษ์</h3>
+                    <p className="text-xs text-slate-500 mt-1">AI ผู้ช่วยดูแลสุขภาพเบื้องต้น</p>
+                </div>
 
-            <button
-                onClick={toggleConnection}
-                className={`rounded-full flex items-center justify-center w-16 h-16 transition-all duration-300 shadow-lg transform hover:scale-105 ${
-                    isConnected ? 'bg-red-500 text-white shadow-red-200' : 'bg-indigo-600 text-white shadow-indigo-200'
-                }`}
-                aria-label={isConnected ? "วางสาย" : "เริ่มสนทนา"}
-            >
-                {isConnected ? <StopIcon className="w-8 h-8"/> : <MicIcon className="w-8 h-8" />}
-            </button>
-
-            {analysisResult && (
-                <div className="mt-8 w-full text-left animate-fade-in space-y-4">
-                    <div className="flex items-center justify-center mb-2">
-                         <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold">
-                            ผลการวิเคราะห์ล่าสุด
-                         </span>
+                {/* Right: Input & Action */}
+                <div className="w-full md:w-2/3 text-left space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                            อาการของคุณเป็นอย่างไรบ้าง?
+                        </label>
+                        <textarea
+                            value={inputText}
+                            onChange={(e) => setInputText(e.target.value)}
+                            placeholder="เช่น ปวดหัวข้างเดียว ตุ้บๆ แพ้แสง มา 2 วันแล้ว หรือ มีผื่นคันขึ้นตามตัว..."
+                            className="w-full p-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-0 text-slate-700 resize-none transition-colors h-32 text-sm"
+                            disabled={isProcessing}
+                        />
                     </div>
                     
-                    <div className="bg-blue-50 rounded-xl p-5 border border-blue-100 shadow-sm">
-                        <div className="flex items-center mb-3">
-                            <div className="p-2 bg-blue-100 rounded-lg text-blue-600 mr-3">
-                                <StethoscopeIcon className="w-6 h-6" />
+                    <button
+                        onClick={handleAnalyze}
+                        disabled={isProcessing || !inputText.trim()}
+                        className={`w-full py-3 px-6 rounded-xl font-bold text-white transition-all transform active:scale-95 flex items-center justify-center shadow-md
+                            ${isProcessing || !inputText.trim() 
+                                ? 'bg-slate-300 cursor-not-allowed' 
+                                : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 hover:shadow-lg'
+                            }`}
+                    >
+                        {isProcessing ? (
+                            <>
+                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                กำลังวิเคราะห์ข้อมูล...
+                            </>
+                        ) : (
+                            <>
+                                <StethoscopeIcon className="w-5 h-5 mr-2" />
+                                วิเคราะห์อาการละเอียด
+                            </>
+                        )}
+                    </button>
+                    
+                    {error && <p className="text-red-500 text-sm mt-2 bg-red-50 p-2 rounded-lg border border-red-100">{error}</p>}
+                </div>
+            </div>
+
+            {/* Analysis Results - Expandable Section */}
+            {analysis && (
+                <div className="mt-8 w-full text-left animate-fade-in border-t border-slate-100 pt-6">
+                    
+                    {/* Speech Bubble */}
+                    <div className="bg-indigo-50 p-4 rounded-2xl rounded-tl-none relative ml-8 mb-6 shadow-sm border border-indigo-100">
+                         <div className="absolute -left-2 top-0 w-4 h-4 bg-indigo-50 border-l border-t border-indigo-100 transform -rotate-45"></div>
+                         <div className="flex items-start">
+                            <div className="shrink-0 mr-3 mt-1">
+                                {isSpeaking ? <SpeakerWaveIcon className="w-5 h-5 text-indigo-500 animate-pulse"/> : <div className="w-5 h-5 text-indigo-300">💬</div>}
                             </div>
-                            <h5 className="font-bold text-blue-800 text-lg">อาการที่ตรวจพบ</h5>
-                        </div>
-                        <div className="text-slate-700 leading-relaxed pl-1 text-sm">
-                            <MarkdownContent text={analysisResult.symptoms} />
-                        </div>
+                            <p className="text-indigo-900 text-sm leading-relaxed font-medium">
+                                {analysis.speechText}
+                            </p>
+                         </div>
                     </div>
 
-                    <div className="bg-green-50 rounded-xl p-5 border border-green-100 shadow-sm">
-                        <div className="flex items-center mb-3">
-                            <div className="p-2 bg-green-100 rounded-lg text-green-600 mr-3">
-                                <CheckCircleIcon className="w-6 h-6" />
+                    <div className="grid gap-4 md:grid-cols-1">
+                        {/* Symptoms Card */}
+                        <div className="bg-white rounded-xl p-5 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-center mb-3 pb-2 border-b border-blue-50">
+                                <div className="p-2 bg-blue-100 rounded-lg text-blue-600 mr-3">
+                                    <StethoscopeIcon className="w-5 h-5" />
+                                </div>
+                                <h5 className="font-bold text-slate-800">สรุปและวิเคราะห์อาการเบื้องต้น</h5>
                             </div>
-                            <h5 className="font-bold text-green-800 text-lg">คำแนะนำเบื้องต้น</h5>
+                            <div className="text-slate-600 text-sm pl-1">
+                                <MarkdownContent text={analysis.symptoms} />
+                            </div>
                         </div>
-                        <div className="text-slate-700 leading-relaxed pl-1 text-sm">
-                            <MarkdownContent text={analysisResult.advice} />
-                        </div>
-                    </div>
 
-                    <div className="bg-amber-50 rounded-xl p-5 border border-amber-100 shadow-sm">
-                        <div className="flex items-center mb-3">
-                            <div className="p-2 bg-amber-100 rounded-lg text-amber-600 mr-3">
-                                <ExclamationIcon className="w-6 h-6" />
+                        {/* Advice Card */}
+                        <div className="bg-gradient-to-br from-green-50 to-white rounded-xl p-5 border border-green-200 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-center mb-3 pb-2 border-b border-green-100">
+                                <div className="p-2 bg-green-100 rounded-lg text-green-600 mr-3">
+                                    <CheckCircleIcon className="w-5 h-5" />
+                                </div>
+                                <h5 className="font-bold text-green-800">คำแนะนำการดูแลตัวเอง (อย่างละเอียด)</h5>
                             </div>
-                            <h5 className="font-bold text-amber-800 text-lg">ข้อควรระวัง</h5>
+                            <div className="text-slate-700 text-sm pl-1">
+                                <MarkdownContent text={analysis.advice} />
+                            </div>
                         </div>
-                        <div className="text-slate-700 leading-relaxed pl-1 text-sm">
-                            <MarkdownContent text={analysisResult.precautions} />
+
+                        {/* Precautions Card */}
+                        <div className="bg-gradient-to-br from-amber-50 to-white rounded-xl p-5 border border-amber-200 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-center mb-3 pb-2 border-b border-amber-100">
+                                <div className="p-2 bg-amber-100 rounded-lg text-amber-600 mr-3">
+                                    <ExclamationIcon className="w-5 h-5" />
+                                </div>
+                                <h5 className="font-bold text-amber-800">ข้อควรระวัง / สัญญาณอันตราย</h5>
+                            </div>
+                            <div className="text-slate-700 text-sm pl-1">
+                                <MarkdownContent text={analysis.precautions} />
+                            </div>
                         </div>
                     </div>
                 </div>
