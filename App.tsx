@@ -1,7 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { HealthCheckCard } from './components/HealthCheckCard';
 import { BMICalculator } from './components/BMICalculator';
-import { SymptomAnalyzer } from './components/SymptomAnalyzer';
 import { NearbyHospitals } from './components/NearbyHospitals';
 import { DrRakAvatar } from './components/DrRakAvatar'; // Import the new component
 import { HEALTH_CHECKS } from './constants';
@@ -209,14 +209,13 @@ const App: React.FC = () => {
           </section>
 
           {/* New Avatar Section */}
-          <section className="mb-12 max-w-lg mx-auto">
+          <section className="mb-12">
             <DrRakAvatar />
           </section>
 
           {/* Primary Tools Section */}
           <section className="mb-12">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 items-start">
-                  <SymptomAnalyzer />
+              <div className="grid grid-cols-1 gap-6 md:gap-8 items-start max-w-xl mx-auto">
                   <NearbyHospitals />
               </div>
           </section>

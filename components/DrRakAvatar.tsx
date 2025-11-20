@@ -1,12 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MicIcon, StopIcon } from './icons';
+import { MicIcon, StopIcon, StethoscopeIcon, CheckCircleIcon, ExclamationIcon } from './icons';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
 
 // --- AUDIO HELPER FUNCTIONS ---
-// These functions are required for processing audio data for the Live API.
-
-// Decodes a base64 string into a Uint8Array.
 function decode(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -17,7 +14,6 @@ function decode(base64: string): Uint8Array {
   return bytes;
 }
 
-// Encodes a Uint8Array into a base64 string.
 function encode(bytes: Uint8Array): string {
   let binary = '';
   const len = bytes.byteLength;
@@ -27,7 +23,6 @@ function encode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-// Decodes raw PCM audio data into an AudioBuffer for playback.
 async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -37,7 +32,6 @@ async function decodeAudioData(
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
@@ -47,7 +41,6 @@ async function decodeAudioData(
   return buffer;
 }
 
-// Creates a Blob object for the Live API from microphone audio data.
 function createBlob(data: Float32Array): Blob {
   const l = data.length;
   const int16 = new Int16Array(l);
@@ -60,9 +53,52 @@ function createBlob(data: Float32Array): Blob {
   };
 }
 
+// --- PARSING & RENDERING HELPERS (from former SymptomAnalyzer) ---
+const parseAnalysisResult = (text: string) => {
+  const sections = {
+    symptoms: '',
+    advice: '',
+    precautions: ''
+  };
+  if (!text) return sections;
+  const symptomsMatch = text.match(/### อาการที่ตรวจพบ([\s\S]*?)(?=###|$)/);
+  const adviceMatch = text.match(/### คำแนะนำเบื้องต้น([\s\S]*?)(?=###|$)/);
+  const precautionsMatch = text.match(/### ข้อควรระวัง([\s\S]*?)(?=###|$)/);
+
+  if (symptomsMatch) sections.symptoms = symptomsMatch[1].trim();
+  if (adviceMatch) sections.advice = adviceMatch[1].trim();
+  if (precautionsMatch) sections.precautions = precautionsMatch[1].trim();
+  
+  return sections;
+};
+
+const MarkdownContent = ({ text }: { text: string }) => {
+    if (!text) return <p className="text-slate-400 italic">ไม่มีข้อมูล</p>;
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    const elements: React.ReactNode[] = [];
+    let currentList: React.ReactNode[] = [];
+
+    lines.forEach((line, idx) => {
+        const cleanLine = line.trim();
+        if (cleanLine.startsWith('-') || cleanLine.startsWith('*')) {
+             const content = cleanLine.replace(/^[\-\*]\s?/, '');
+             currentList.push(<li key={`li-${idx}`} className="mb-1">{content}</li>);
+        } else {
+             if (currentList.length > 0) {
+                 elements.push(<ul key={`ul-${idx}`} className="list-disc pl-5 mb-3 space-y-1">{[...currentList]}</ul>);
+                 currentList = [];
+             }
+             elements.push(<p key={`p-${idx}`} className="mb-2">{cleanLine}</p>);
+        }
+    });
+    if (currentList.length > 0) {
+        elements.push(<ul key={`ul-end`} className="list-disc pl-5 mb-3 space-y-1">{[...currentList]}</ul>);
+    }
+    return <>{elements}</>;
+};
+
 
 // --- SUB COMPONENTS ---
-
 const DrRakImage = ({ isSpeaking }: { isSpeaking: boolean }) => (
   <svg viewBox="0 0 400 400" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
      <defs>
@@ -98,12 +134,14 @@ const DrRakImage = ({ isSpeaking }: { isSpeaking: boolean }) => (
   </svg>
 );
 
+
 // --- MAIN COMPONENT ---
 export const DrRakAvatar: React.FC = () => {
     const [isSessionActive, setIsSessionActive] = useState(false);
     const [statusText, setStatusText] = useState('แตะปุ่มไมค์เพื่อเริ่มคุยค่ะ');
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [transcript, setTranscript] = useState({ input: '', output: '' });
+    const [analysisResult, setAnalysisResult] = useState<string | null>(null);
 
     const sessionPromiseRef = useRef<Promise<any> | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -132,6 +170,7 @@ export const DrRakAvatar: React.FC = () => {
         setIsSpeaking(false);
         setStatusText('แตะปุ่มไมค์เพื่อเริ่มคุยค่ะ');
         setTranscript({ input: '', output: '' });
+        setAnalysisResult(null); 
     };
 
     const handleToggleSystem = async () => {
@@ -141,7 +180,9 @@ export const DrRakAvatar: React.FC = () => {
         }
 
         try {
-            await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Check for permissions first
+            const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            testStream.getTracks().forEach(track => track.stop()); // Stop the test stream immediately
         } catch (error) {
             setStatusText('กรุณาอนุญาตให้ใช้ไมโครโฟนค่ะ');
             return;
@@ -152,14 +193,22 @@ export const DrRakAvatar: React.FC = () => {
         currentInputTranscriptRef.current = '';
         currentOutputTranscriptRef.current = '';
         setTranscript({ input: '', output: '' });
+        setAnalysisResult(null);
 
         if (!inputAudioContextRef.current) {
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
             inputAudioContextRef.current = new AudioContext({ sampleRate: 16000 });
         }
+        if (inputAudioContextRef.current.state === 'suspended') {
+            inputAudioContextRef.current.resume();
+        }
+
         if (!outputAudioContextRef.current) {
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
             outputAudioContextRef.current = new AudioContext({ sampleRate: 24000 });
+        }
+        if (outputAudioContextRef.current.state === 'suspended') {
+            outputAudioContextRef.current.resume();
         }
         
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
@@ -168,7 +217,27 @@ export const DrRakAvatar: React.FC = () => {
             config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' }}},
-                systemInstruction: 'คุณคือ "หมอรักษ์" ผู้ช่วย AI ที่มีความเห็นอกเห็นใจและเป็นมิตร พูดคุยกับผู้ใช้ด้วยความเป็นห่วงเป็นใย ตอบคำถามสั้นๆ และให้กำลังใจ ลงท้ายด้วย "ค่ะ" เสมอ เมื่อผู้ใช้บอกอาการเจ็บป่วย ให้แนะนำให้ใช้ฟังก์ชัน "วิเคราะห์อาการ" ในแอป',
+                systemInstruction: `คุณคือ "หมอรักษ์" AI ประจำบ้านผู้หญิงที่มีความเห็นอกเห็นใจและเป็นมิตร พูดคุยกับผู้ใช้ด้วยความเป็นห่วงเป็นใยและใช้ภาษาไทยที่เข้าใจง่ายสำหรับผู้สูงอายุ ลงท้ายประโยคด้วย "ค่ะ" เสมอ
+
+หน้าที่ของคุณมี 2 อย่าง:
+1.  **การสนทนาทั่วไป:** ตอบคำถามสั้นๆ ให้กำลังใจ และสร้างความเป็นกันเอง
+2.  **การวิเคราะห์อาการ:** เมื่อผู้ใช้เริ่มเล่าอาการเจ็บป่วยอย่างชัดเจน ให้คุณเปลี่ยนไปทำหน้าที่วิเคราะห์อาการ และต้องตอบกลับในรูปแบบพิเศษดังนี้เท่านั้น:
+
+<analysis>
+### อาการที่ตรวจพบ
+(อธิบายความเป็นไปได้ของโรคหรือสาเหตุอย่างละเอียดและเข้าใจง่าย)
+
+### คำแนะนำเบื้องต้น
+(แนะนำวิธีดูแลตัวเองอย่างละเอียด เป็นข้อๆ ใช้สัญลักษณ์ -)
+
+### ข้อควรระวัง
+(บอกอาการที่เป็นสัญญาณเตือนที่ต้องรีบไปพบแพทย์ทันที)
+</analysis>
+
+กฎสำคัญ:
+- เมื่อให้ผลวิเคราะห์ ต้องเริ่มต้นด้วยแท็ก <analysis> และจบด้วย </analysis> เท่านั้น ห้ามมีข้อความอื่นนอกแท็ก
+- ในการสนทนาปกติ ห้ามใช้รูปแบบการวิเคราะห์หรือแท็ก <analysis> เด็ดขาด
+- เรียกผู้ใช้งานว่า "คนไข้" เมื่อทำการวิเคราะห์ และเรียก "คุณ" ในการสนทนาทั่วไป`,
                 inputAudioTranscription: {},
                 outputAudioTranscription: {},
             },
@@ -193,7 +262,8 @@ export const DrRakAvatar: React.FC = () => {
                 onmessage: async (message: LiveServerMessage) => {
                     if (message.serverContent?.inputTranscription) {
                         currentInputTranscriptRef.current += message.serverContent.inputTranscription.text;
-                        setTranscript(prev => ({ ...prev, input: currentInputTranscriptRef.current }));
+                        setTranscript(prev => ({ ...prev, input: currentInputTranscriptRef.current, output: '' }));
+                        setAnalysisResult(null);
                     }
                     if (message.serverContent?.outputTranscription) {
                         currentOutputTranscriptRef.current += message.serverContent.outputTranscription.text;
@@ -201,6 +271,14 @@ export const DrRakAvatar: React.FC = () => {
                     }
 
                     if (message.serverContent?.turnComplete) {
+                        const fullOutput = currentOutputTranscriptRef.current;
+                        if (fullOutput.includes('<analysis>')) {
+                            const match = fullOutput.match(/<analysis>([\s\S]*)<\/analysis>/);
+                            if (match && match[1]) {
+                                setAnalysisResult(match[1].trim());
+                                setTranscript({ input: currentInputTranscriptRef.current, output: 'ผลการวิเคราะห์แสดงอยู่ด้านล่างค่ะ' });
+                            }
+                        }
                         currentInputTranscriptRef.current = '';
                         currentOutputTranscriptRef.current = '';
                     }
@@ -218,9 +296,7 @@ export const DrRakAvatar: React.FC = () => {
 
                         source.addEventListener('ended', () => {
                             playbackQueueRef.current.delete(source);
-                            if (playbackQueueRef.current.size === 0) {
-                                setIsSpeaking(false);
-                            }
+                            if (playbackQueueRef.current.size === 0) setIsSpeaking(false);
                         });
 
                         source.start(nextStartTimeRef.current);
@@ -250,8 +326,10 @@ export const DrRakAvatar: React.FC = () => {
         return statusText;
     }
 
+    const sections = analysisResult ? parseAnalysisResult(analysisResult) : null;
+
     return (
-        <div className="bg-white rounded-2xl shadow-lg border-2 border-indigo-50 p-6 flex flex-col items-center text-center">
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-indigo-50 p-6 flex flex-col items-center text-center max-w-lg mx-auto">
             <div className="relative mb-4 w-32 h-32">
                 <DrRakImage isSpeaking={isSpeaking} />
                 {isSessionActive && !isSpeaking && (
@@ -271,6 +349,48 @@ export const DrRakAvatar: React.FC = () => {
             >
                 {isSessionActive ? <StopIcon className="w-8 h-8"/> : <MicIcon className="w-8 h-8" />}
             </button>
+            {analysisResult && sections && (
+                <div className="mt-6 w-full text-left animate-fade-in space-y-4" role="region" aria-label="ผลการวิเคราะห์">
+                    <h4 className="text-lg font-bold text-slate-800 flex items-center text-center justify-center">
+                        👩‍⚕️ ผลการวิเคราะห์จากหมอรักษ์
+                    </h4>
+                    <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
+                        <div className="flex items-center mb-3">
+                            <div className="p-2 bg-blue-100 rounded-lg text-blue-600 mr-3">
+                                <StethoscopeIcon className="w-6 h-6" />
+                            </div>
+                            <h5 className="font-bold text-blue-800 text-lg">อาการที่ตรวจพบ</h5>
+                        </div>
+                        <div className="text-slate-700 leading-relaxed pl-1 text-sm">
+                            <MarkdownContent text={sections.symptoms} />
+                        </div>
+                    </div>
+
+                    <div className="bg-green-50 rounded-xl p-5 border border-green-100">
+                        <div className="flex items-center mb-3">
+                            <div className="p-2 bg-green-100 rounded-lg text-green-600 mr-3">
+                                <CheckCircleIcon className="w-6 h-6" />
+                            </div>
+                            <h5 className="font-bold text-green-800 text-lg">คำแนะนำเบื้องต้น</h5>
+                        </div>
+                        <div className="text-slate-700 leading-relaxed pl-1 text-sm">
+                            <MarkdownContent text={sections.advice} />
+                        </div>
+                    </div>
+
+                    <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                        <div className="flex items-center mb-3">
+                            <div className="p-2 bg-amber-100 rounded-lg text-amber-600 mr-3">
+                                <ExclamationIcon className="w-6 h-6" />
+                            </div>
+                            <h5 className="font-bold text-amber-800 text-lg">ข้อควรระวัง</h5>
+                        </div>
+                        <div className="text-slate-700 leading-relaxed pl-1 text-sm">
+                            <MarkdownContent text={sections.precautions} />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
