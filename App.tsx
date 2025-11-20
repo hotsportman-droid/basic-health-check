@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { HealthCheckCard } from './components/HealthCheckCard';
 import { BMICalculator } from './components/BMICalculator';
 import { NearbyHospitals } from './components/NearbyHospitals';
-import { DrRakAvatar } from './components/DrRakAvatar'; // Import the new component
 import { HEALTH_CHECKS } from './constants';
 import { StethoscopeIcon, DownloadIcon, ShareIcon, ShareIcon as ShareIconSmall } from './components/icons';
 import { ShareModal } from './components/ShareModal';
@@ -203,14 +202,9 @@ const App: React.FC = () => {
                 </h2>
                 
                 <p className="text-indigo-100 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed font-medium opacity-90">
-                    คู่มือตรวจเช็คสุขภาพอัจฉริยะพร้อม "หมอรักษ์" AI ที่จะช่วยวิเคราะห์และแนะนำการดูแลเบื้องต้น เพื่อความอุ่นใจของคุณและครอบครัว
+                    คู่มือตรวจเช็คสุขภาพอัจฉริยะ เพื่อความอุ่นใจของคุณและครอบครัว
                 </p>
               </div>
-          </section>
-
-          {/* New Avatar Section */}
-          <section className="mb-12">
-            <DrRakAvatar />
           </section>
 
           {/* Primary Tools Section */}
