@@ -179,45 +179,44 @@ export const DrRakAvatar: React.FC = () => {
             return;
         }
 
-        try {
-            // Check for permissions first
-            const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            testStream.getTracks().forEach(track => track.stop()); // Stop the test stream immediately
-        } catch (error) {
-            setStatusText('กรุณาอนุญาตให้ใช้ไมโครโฟนค่ะ');
-            return;
-        }
-
         setIsSessionActive(true);
-        setStatusText('กำลังเชื่อมต่อ...');
+        setStatusText('กำลังขออนุญาตใช้ไมโครโฟน...');
         currentInputTranscriptRef.current = '';
         currentOutputTranscriptRef.current = '';
         setTranscript({ input: '', output: '' });
         setAnalysisResult(null);
 
-        if (!inputAudioContextRef.current) {
-            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-            inputAudioContextRef.current = new AudioContext({ sampleRate: 16000 });
-        }
-        if (inputAudioContextRef.current.state === 'suspended') {
-            inputAudioContextRef.current.resume();
-        }
+        try {
+            // Step 1: Get microphone stream first
+            streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-        if (!outputAudioContextRef.current) {
-            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-            outputAudioContextRef.current = new AudioContext({ sampleRate: 24000 });
-        }
-        if (outputAudioContextRef.current.state === 'suspended') {
-            outputAudioContextRef.current.resume();
-        }
-        
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-        sessionPromiseRef.current = ai.live.connect({
-            model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-            config: {
-                responseModalities: [Modality.AUDIO],
-                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' }}},
-                systemInstruction: `คุณคือ "หมอรักษ์" AI ประจำบ้านผู้หญิงที่มีความเห็นอกเห็นใจและเป็นมิตร พูดคุยกับผู้ใช้ด้วยความเป็นห่วงเป็นใยและใช้ภาษาไทยที่เข้าใจง่ายสำหรับผู้สูงอายุ ลงท้ายประโยคด้วย "ค่ะ" เสมอ
+            setStatusText('กำลังเชื่อมต่อกับหมอรักษ์...');
+
+            // Step 2: Initialize Audio Contexts
+            if (!inputAudioContextRef.current) {
+                const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+                inputAudioContextRef.current = new AudioContext({ sampleRate: 16000 });
+            }
+            if (inputAudioContextRef.current.state === 'suspended') {
+                inputAudioContextRef.current.resume();
+            }
+
+            if (!outputAudioContextRef.current) {
+                const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+                outputAudioContextRef.current = new AudioContext({ sampleRate: 24000 });
+            }
+            if (outputAudioContextRef.current.state === 'suspended') {
+                outputAudioContextRef.current.resume();
+            }
+            
+            // Step 3: Connect to Gemini Live API
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            sessionPromiseRef.current = ai.live.connect({
+                model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+                config: {
+                    responseModalities: [Modality.AUDIO],
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' }}},
+                    systemInstruction: `คุณคือ "หมอรักษ์" AI ประจำบ้านผู้หญิงที่มีความเห็นอกเห็นใจและเป็นมิตร พูดคุยกับผู้ใช้ด้วยความเป็นห่วงเป็นใยและใช้ภาษาไทยที่เข้าใจง่ายสำหรับผู้สูงอายุ ลงท้ายประโยคด้วย "ค่ะ" เสมอ
 
 หน้าที่ของคุณมี 2 อย่าง:
 1.  **การสนทนาทั่วไป:** ตอบคำถามสั้นๆ ให้กำลังใจ และสร้างความเป็นกันเอง
@@ -238,82 +237,88 @@ export const DrRakAvatar: React.FC = () => {
 - เมื่อให้ผลวิเคราะห์ ต้องเริ่มต้นด้วยแท็ก <analysis> และจบด้วย </analysis> เท่านั้น ห้ามมีข้อความอื่นนอกแท็ก
 - ในการสนทนาปกติ ห้ามใช้รูปแบบการวิเคราะห์หรือแท็ก <analysis> เด็ดขาด
 - เรียกผู้ใช้งานว่า "คนไข้" เมื่อทำการวิเคราะห์ และเรียก "คุณ" ในการสนทนาทั่วไป`,
-                inputAudioTranscription: {},
-                outputAudioTranscription: {},
-            },
-            callbacks: {
-                onopen: async () => {
-                    setStatusText('เชื่อมต่อแล้ว พูดได้เลยค่ะ...');
-                    streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    const source = inputAudioContextRef.current!.createMediaStreamSource(streamRef.current);
-                    audioProcessorRef.current = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
-                    
-                    audioProcessorRef.current.onaudioprocess = (event) => {
-                        const inputData = event.inputBuffer.getChannelData(0);
-                        const pcmBlob = createBlob(inputData);
-                        sessionPromiseRef.current?.then((session) => {
-                            session.sendRealtimeInput({ media: pcmBlob });
-                        });
-                    };
-                    
-                    source.connect(audioProcessorRef.current);
-                    audioProcessorRef.current.connect(inputAudioContextRef.current!.destination);
+                    inputAudioTranscription: {},
+                    outputAudioTranscription: {},
                 },
-                onmessage: async (message: LiveServerMessage) => {
-                    if (message.serverContent?.inputTranscription) {
-                        currentInputTranscriptRef.current += message.serverContent.inputTranscription.text;
-                        setTranscript(prev => ({ ...prev, input: currentInputTranscriptRef.current, output: '' }));
-                        setAnalysisResult(null);
-                    }
-                    if (message.serverContent?.outputTranscription) {
-                        currentOutputTranscriptRef.current += message.serverContent.outputTranscription.text;
-                        setTranscript(prev => ({ ...prev, output: currentOutputTranscriptRef.current }));
-                    }
-
-                    if (message.serverContent?.turnComplete) {
-                        const fullOutput = currentOutputTranscriptRef.current;
-                        if (fullOutput.includes('<analysis>')) {
-                            const match = fullOutput.match(/<analysis>([\s\S]*)<\/analysis>/);
-                            if (match && match[1]) {
-                                setAnalysisResult(match[1].trim());
-                                setTranscript({ input: currentInputTranscriptRef.current, output: 'ผลการวิเคราะห์แสดงอยู่ด้านล่างค่ะ' });
-                            }
-                        }
-                        currentInputTranscriptRef.current = '';
-                        currentOutputTranscriptRef.current = '';
-                    }
-
-                    const audioData = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-                    if (audioData) {
-                        setIsSpeaking(true);
-                        const outputContext = outputAudioContextRef.current!;
-                        nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputContext.currentTime);
+                callbacks: {
+                    onopen: () => {
+                        setStatusText('เชื่อมต่อแล้ว พูดได้เลยค่ะ...');
+                        if (!streamRef.current || !inputAudioContextRef.current) return;
                         
-                        const audioBuffer = await decodeAudioData(decode(audioData), outputContext, 24000, 1);
-                        const source = outputContext.createBufferSource();
-                        source.buffer = audioBuffer;
-                        source.connect(outputContext.destination);
+                        const source = inputAudioContextRef.current.createMediaStreamSource(streamRef.current);
+                        audioProcessorRef.current = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
+                        
+                        audioProcessorRef.current.onaudioprocess = (event) => {
+                            const inputData = event.inputBuffer.getChannelData(0);
+                            const pcmBlob = createBlob(inputData);
+                            sessionPromiseRef.current?.then((session) => {
+                                session.sendRealtimeInput({ media: pcmBlob });
+                            });
+                        };
+                        
+                        source.connect(audioProcessorRef.current);
+                        audioProcessorRef.current.connect(inputAudioContextRef.current.destination);
+                    },
+                    onmessage: async (message: LiveServerMessage) => {
+                        if (message.serverContent?.inputTranscription) {
+                            currentInputTranscriptRef.current += message.serverContent.inputTranscription.text;
+                            setTranscript(prev => ({ ...prev, input: currentInputTranscriptRef.current, output: '' }));
+                            setAnalysisResult(null);
+                        }
+                        if (message.serverContent?.outputTranscription) {
+                            currentOutputTranscriptRef.current += message.serverContent.outputTranscription.text;
+                            setTranscript(prev => ({ ...prev, output: currentOutputTranscriptRef.current }));
+                        }
 
-                        source.addEventListener('ended', () => {
-                            playbackQueueRef.current.delete(source);
-                            if (playbackQueueRef.current.size === 0) setIsSpeaking(false);
-                        });
+                        if (message.serverContent?.turnComplete) {
+                            const fullOutput = currentOutputTranscriptRef.current;
+                            if (fullOutput.includes('<analysis>')) {
+                                const match = fullOutput.match(/<analysis>([\s\S]*)<\/analysis>/);
+                                if (match && match[1]) {
+                                    setAnalysisResult(match[1].trim());
+                                    setTranscript({ input: currentInputTranscriptRef.current, output: 'ผลการวิเคราะห์แสดงอยู่ด้านล่างค่ะ' });
+                                }
+                            }
+                            currentInputTranscriptRef.current = '';
+                            currentOutputTranscriptRef.current = '';
+                        }
 
-                        source.start(nextStartTimeRef.current);
-                        nextStartTimeRef.current += audioBuffer.duration;
-                        playbackQueueRef.current.add(source);
-                    }
+                        const audioData = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+                        if (audioData) {
+                            setIsSpeaking(true);
+                            const outputContext = outputAudioContextRef.current!;
+                            nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputContext.currentTime);
+                            
+                            const audioBuffer = await decodeAudioData(decode(audioData), outputContext, 24000, 1);
+                            const source = outputContext.createBufferSource();
+                            source.buffer = audioBuffer;
+                            source.connect(outputContext.destination);
+
+                            source.addEventListener('ended', () => {
+                                playbackQueueRef.current.delete(source);
+                                if (playbackQueueRef.current.size === 0) setIsSpeaking(false);
+                            });
+
+                            source.start(nextStartTimeRef.current);
+                            nextStartTimeRef.current += audioBuffer.duration;
+                            playbackQueueRef.current.add(source);
+                        }
+                    },
+                    onerror: (e: ErrorEvent) => {
+                        console.error('Live API Error:', e);
+                        setStatusText('เกิดข้อผิดพลาดในการเชื่อมต่อค่ะ');
+                        stopAllProcesses();
+                    },
+                    onclose: (e: CloseEvent) => {
+                        stopAllProcesses();
+                    },
                 },
-                onerror: (e: ErrorEvent) => {
-                    console.error('Live API Error:', e);
-                    setStatusText('เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');
-                    stopAllProcesses();
-                },
-                onclose: (e: CloseEvent) => {
-                    stopAllProcesses();
-                },
-            },
-        });
+            });
+        } catch (error) {
+            console.error("Failed to start session:", error);
+            setStatusText('ไม่สามารถเข้าถึงไมโครโฟนได้ค่ะ');
+            stopAllProcesses();
+        }
     };
     
     useEffect(() => {
