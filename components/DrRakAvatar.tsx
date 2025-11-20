@@ -109,10 +109,13 @@ export const DrRakAvatar: React.FC = () => {
     const handleAnalyze = async () => {
         if (!inputText.trim()) return;
 
+        // Hack for iOS Safari: Play a silent sound immediately on user click
+        // to "unlock" the audio context for later use in the async callback.
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+
         setIsProcessing(true);
         setAnalysis(null);
         setError(null);
-        window.speechSynthesis.cancel(); // Stop any existing speech
         
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -170,7 +173,8 @@ export const DrRakAvatar: React.FC = () => {
                  });
             }
 
-            // Attempt Auto-speak (Might be blocked by Safari due to async delay)
+            // Attempt Auto-speak (Might still be blocked by Safari depending on network delay)
+            // The silent utterance hack above helps, but the replay button is the failsafe.
             speak(speechText);
 
         } catch (err) {
@@ -208,7 +212,7 @@ export const DrRakAvatar: React.FC = () => {
                             value={inputText}
                             onChange={(e) => setInputText(e.target.value)}
                             placeholder="เช่น ปวดหัวข้างเดียว ตุ้บๆ แพ้แสง มา 2 วันแล้ว หรือ มีผื่นคันขึ้นตามตัว..."
-                            className="w-full p-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-0 text-slate-700 resize-none transition-colors h-32 text-sm"
+                            className="w-full p-4 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-0 text-slate-700 resize-none transition-colors h-32 text-base md:text-sm"
                             disabled={isProcessing}
                         />
                     </div>

@@ -179,7 +179,7 @@ export const BMICalculator: React.FC<BMICalculatorProps> = ({ isOpen, onToggle }
                     id="weight"
                     value={weight}
                     onChange={(e) => setWeight(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-base md:text-sm"
                     placeholder="เช่น 60"
                 />
                 </div>
@@ -192,7 +192,7 @@ export const BMICalculator: React.FC<BMICalculatorProps> = ({ isOpen, onToggle }
                     id="height"
                     value={height}
                     onChange={(e) => setHeight(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-base md:text-sm"
                     placeholder="เช่น 175"
                 />
                 </div>

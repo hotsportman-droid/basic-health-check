@@ -150,7 +150,7 @@ const App: React.FC = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-slate-50 text-slate-800">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 text-slate-800">
         <header className="bg-slate-50/80 backdrop-blur-lg shadow-sm sticky top-0 z-20">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-20">
@@ -192,7 +192,7 @@ const App: React.FC = () => {
         <main className="container mx-auto p-4 sm:p-6 lg:p-8">
           
           {/* Beautiful Banner Section */}
-          <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-blue-600 to-teal-500 text-white shadow-xl shadow-indigo-200 mb-10 p-8 md:p-16 text-center isolate transition-transform hover:scale-[1.01] duration-500">
+          <section className="relative overflow-hidden isolate rounded-3xl bg-gradient-to-br from-indigo-600 via-blue-600 to-teal-500 text-white shadow-xl shadow-indigo-200 mb-10 p-8 md:p-16 text-center transition-transform hover:scale-[1.01] duration-500 transform-gpu">
               {/* Decorative Background Elements */}
               <div className="absolute top-0 left-0 -translate-x-1/4 -translate-y-1/4 w-96 h-96 bg-white opacity-10 rounded-full blur-3xl pointer-events-none"></div>
               <div className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 w-96 h-96 bg-teal-400 opacity-20 rounded-full blur-3xl pointer-events-none"></div>
