@@ -19,6 +19,10 @@
         background-color: #f8fafc; /* bg-slate-50 */
         background-image: radial-gradient(circle at top, #ffffff 40%, transparent 80%);
       }
+      /* Fix for Safari Glassmorphism */
+      .backdrop-blur-lg, .backdrop-blur-md {
+        -webkit-backdrop-filter: blur(16px);
+      }
     </style>
 
 <script type="importmap">

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { StethoscopeIcon, CheckCircleIcon, ExclamationIcon, SpeakerWaveIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
@@ -84,14 +83,25 @@ export const DrRakAvatar: React.FC = () => {
         utterance.lang = 'th-TH';
         utterance.rate = 1.0;
         
-        // Try to find a Thai voice
-        const voices = window.speechSynthesis.getVoices();
-        const thaiVoice = voices.find(v => v.lang.includes('th'));
-        if (thaiVoice) utterance.voice = thaiVoice;
+        // Try to find a Thai voice - Safari loads voices asynchronously
+        const setVoice = () => {
+            const voices = window.speechSynthesis.getVoices();
+            const thaiVoice = voices.find(v => v.lang.includes('th'));
+            if (thaiVoice) utterance.voice = thaiVoice;
+        };
+
+        if (window.speechSynthesis.getVoices().length === 0) {
+            window.speechSynthesis.onvoiceschanged = setVoice;
+        } else {
+            setVoice();
+        }
 
         utterance.onstart = () => setIsSpeaking(true);
         utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
+        utterance.onerror = (e) => {
+            console.error("Speech Error", e);
+            setIsSpeaking(false);
+        };
 
         window.speechSynthesis.speak(utterance);
     };
@@ -160,7 +170,7 @@ export const DrRakAvatar: React.FC = () => {
                  });
             }
 
-            // Auto-speak the summary
+            // Attempt Auto-speak (Might be blocked by Safari due to async delay)
             speak(speechText);
 
         } catch (err) {
@@ -233,16 +243,26 @@ export const DrRakAvatar: React.FC = () => {
             {analysis && (
                 <div className="mt-8 w-full text-left animate-fade-in border-t border-slate-100 pt-6">
                     
-                    {/* Speech Bubble */}
+                    {/* Speech Bubble with Manual Replay Button */}
                     <div className="bg-indigo-50 p-4 rounded-2xl rounded-tl-none relative ml-8 mb-6 shadow-sm border border-indigo-100">
                          <div className="absolute -left-2 top-0 w-4 h-4 bg-indigo-50 border-l border-t border-indigo-100 transform -rotate-45"></div>
-                         <div className="flex items-start">
-                            <div className="shrink-0 mr-3 mt-1">
-                                {isSpeaking ? <SpeakerWaveIcon className="w-5 h-5 text-indigo-500 animate-pulse"/> : <div className="w-5 h-5 text-indigo-300">💬</div>}
+                         <div className="flex items-start justify-between">
+                            <div className="flex items-start pr-2">
+                                <div className="shrink-0 mr-3 mt-1">
+                                    {isSpeaking ? <SpeakerWaveIcon className="w-5 h-5 text-indigo-500 animate-pulse"/> : <div className="w-5 h-5 text-indigo-300">💬</div>}
+                                </div>
+                                <p className="text-indigo-900 text-sm leading-relaxed font-medium">
+                                    {analysis.speechText}
+                                </p>
                             </div>
-                            <p className="text-indigo-900 text-sm leading-relaxed font-medium">
-                                {analysis.speechText}
-                            </p>
+                            <button 
+                                onClick={() => speak(analysis.speechText)}
+                                className="shrink-0 p-2 bg-white rounded-full shadow-sm text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+                                aria-label="ฟังเสียงซ้ำ"
+                                title="ฟังเสียงซ้ำ (หากเสียงไม่เล่นอัตโนมัติ)"
+                            >
+                                <SpeakerWaveIcon className="w-4 h-4" />
+                            </button>
                          </div>
                     </div>
 

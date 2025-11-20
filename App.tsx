@@ -51,20 +51,28 @@ const App: React.FC = () => {
     // Session Management & Usage Counting Logic
     const handleSessionCount = () => {
       const now = Date.now();
-      const lastActive = parseInt(localStorage.getItem('shc_last_active') || '0', 10);
-      let currentLocalCount = parseInt(localStorage.getItem('shc_total_usage') || '0', 10);
+      
+      try {
+        // Wrap localStorage access in try-catch for Safari Private Mode
+        const lastActive = parseInt(localStorage.getItem('shc_last_active') || '0', 10);
+        let currentLocalCount = parseInt(localStorage.getItem('shc_total_usage') || '0', 10);
 
-      // Check if this is a new session:
-      // 1. No last active time recorded (First time user)
-      // 2. OR Time elapsed since last active > 30 minutes
-      if (!lastActive || (now - lastActive > SESSION_TIMEOUT)) {
-        currentLocalCount += 1;
-        localStorage.setItem('shc_total_usage', currentLocalCount.toString());
+        // Check if this is a new session:
+        // 1. No last active time recorded (First time user)
+        // 2. OR Time elapsed since last active > 30 minutes
+        if (!lastActive || (now - lastActive > SESSION_TIMEOUT)) {
+          currentLocalCount += 1;
+          localStorage.setItem('shc_total_usage', currentLocalCount.toString());
+        }
+
+        // Update state and timestamp
+        setTotalUsage(BASE_USAGE_COUNT + currentLocalCount);
+        localStorage.setItem('shc_last_active', now.toString());
+      } catch (error) {
+        console.warn('LocalStorage access denied (likely Safari Private Mode):', error);
+        // Fallback: just use base count + 1 for display in this session
+        setTotalUsage(BASE_USAGE_COUNT + 1);
       }
-
-      // Update state and timestamp
-      setTotalUsage(BASE_USAGE_COUNT + currentLocalCount);
-      localStorage.setItem('shc_last_active', now.toString());
     };
 
     // 1. Run on initial load
