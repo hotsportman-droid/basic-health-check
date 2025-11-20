@@ -34,14 +34,20 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  // Check for API Key presence first for server configuration validation.
+  if (!process.env.API_KEY) {
+    console.error('FATAL: API_KEY environment variable not set on the server.');
+    return res.status(500).json({ error: 'เกิดข้อผิดพลาดในการตั้งค่าเซิร์ฟเวอร์' });
+  }
+
   try {
-    // IMPORTANT: API_KEY is securely sourced from Vercel's environment variables.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const { prompt } = req.body;
 
     if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
+      return res.status(400).json({ error: 'ไม่พบข้อความที่ต้องการส่ง' });
     }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -57,7 +63,7 @@ export default async function handler(req: any, res: any) {
 
   } catch (error) {
     console.error('API Error:', error);
-    // Provide a generic error to the client for security.
-    return res.status(500).json({ error: 'Failed to communicate with the AI model.' });
+    // Provide a generic but informative error to the client.
+    return res.status(500).json({ error: 'ไม่สามารถสื่อสารกับโมเดล AI ได้' });
   }
 }

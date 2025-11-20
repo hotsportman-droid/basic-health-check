@@ -157,8 +157,8 @@ export const DrRakAvatar: React.FC = () => {
             });
 
             if (!apiResponse.ok) {
-                const errorData = await apiResponse.json();
-                throw new Error(errorData.error || `API call failed with status: ${apiResponse.status}`);
+                const errorData = await apiResponse.json().catch(() => ({ error: 'ไม่สามารถอ่านข้อผิดพลาดจากเซิร์ฟเวอร์ได้' }));
+                throw new Error(errorData.error || `การเชื่อมต่อล้มเหลว (สถานะ: ${apiResponse.status})`);
             }
             
             const data = await apiResponse.json();
@@ -176,9 +176,9 @@ export const DrRakAvatar: React.FC = () => {
                 setAnalysisResult(null);
                 speakText(responseText);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("API Request Error:", err);
-            setError('ขออภัยค่ะ เกิดข้อผิดพลาดในการสื่อสารกับหมอรักษ์');
+            setError(`ขออภัยค่ะ เกิดข้อผิดพลาด: ${err.message}`);
             setStatusText('แตะปุ่มไมค์เพื่อเริ่มคุยค่ะ');
         }
     };
