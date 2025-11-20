@@ -3,35 +3,13 @@ import { BrainIcon, MicIcon, SpeakerWaveIcon, StopIcon, SettingsIcon, Stethoscop
 import { Modal } from './Modal';
 import { AdBanner } from './AdBanner';
 import { GoogleGenAI } from '@google/genai';
-import { SYSTEM_CONFIG } from '../constants';
+// FIX: Removed SYSTEM_CONFIG import to use process.env.API_KEY exclusively as per guidelines.
 
 interface SymptomAnalyzerProps {
   onAnalysisSuccess?: () => void;
 }
 
-// --- SAFE KEY RETRIEVAL ---
-export const getSafeApiKey = (): string | null => {
-  try {
-    if (SYSTEM_CONFIG.GLOBAL_API_KEY && SYSTEM_CONFIG.GLOBAL_API_KEY.trim().length > 0) {
-        return SYSTEM_CONFIG.GLOBAL_API_KEY;
-    }
-    const localKey = localStorage.getItem('shc_api_key');
-    if (localKey && localKey.trim().length > 0) return localKey;
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
-        // @ts-ignore
-        return import.meta.env.VITE_API_KEY;
-    }
-    // @ts-ignore
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      // @ts-ignore
-      return process.env.API_KEY;
-    }
-  } catch (e) {
-    return null;
-  }
-  return null;
-};
+// FIX: Removed getSafeApiKey to use process.env.API_KEY exclusively as per guidelines.
 
 // --- SMART OFFLINE DOCTOR ---
 const analyzeSymptomsOffline = (input: string): string => {
@@ -52,7 +30,7 @@ const analyzeSymptomsOffline = (input: string): string => {
       adviceList = "- หมั่นเช็ดตัวด้วยน้ำอุณหภูมิห้อง (ห้ามใช้น้ำเย็นจัด) เพื่อช่วยลดความร้อนในร่างกายค่ะ\n- ดื่มน้ำอุ่นหรือน้ำอุณหภูมิห้องมากๆ อย่างน้อยวันละ 8-10 แก้ว เพื่อไม่ให้ร่างกายขาดน้ำค่ะ\n- ทานยาลดไข้พาราเซตามอลทุก 4-6 ชั่วโมงหากยังมีไข้ และควรนอนพักผ่อนให้มากๆ ค่ะ";
   }
   else if (text.includes('คอ') || text.includes('ไอ') || text.includes('เสมหะ') || text.includes('หวัด') || text.includes('มูก')) {
-      symptomsDetected = "คนไข้มีอาการติดเชื้อทางเดินหายใจส่วนต้น ทำให้เกิดการระคายเคืองคอ มีเสมหะ หรือน้ำมูกไหลค่ะ ซึ่งมักเกิดจากเชื้อไวรัสไข้หวัด หรือการแพ้อากาศค่ะ";
+      symptomsDetected = "คนไข้มีอาการติดเชื้อทางเดินใจส่วนต้น ทำให้เกิดการระคายเคืองคอ มีเสมหะ หรือน้ำมูกไหลค่ะ ซึ่งมักเกิดจากเชื้อไวรัสไข้หวัด หรือการแพ้อากาศค่ะ";
       adviceList = "- จิบน้ำอุ่นผสมมะนาว หรือน้ำผึ้ง บ่อยๆ จะช่วยให้ชุ่มคอและละลายเสมหะได้ดีค่ะ\n- กลั้วคอด้วยน้ำเกลืออุ่นๆ เช้าและเย็น เพื่อลดเชื้อโรคในลำคอค่ะ\n- สวมหน้ากากอนามัยเพื่อป้องกันการแพร่เชื้อ และหลีกเลี่ยงการโดนลมเย็นหรืออากาศเย็นจัดนะคะ";
   }
   else if (text.includes('ผื่น') || text.includes('คัน') || text.includes('ตุ่ม') || text.includes('แดง')) {
@@ -321,7 +299,8 @@ export const SymptomAnalyzer: React.FC<SymptomAnalyzerProps> = ({ onAnalysisSucc
     speak("กำลังวิเคราะห์ข้อมูล รอสักครู่นะคะ");
 
     try {
-      const apiKey = getSafeApiKey();
+      // FIX: Use API key from environment variable as per guidelines.
+      const apiKey = process.env.API_KEY;
       let text = "";
 
       if (apiKey && navigator.onLine) {

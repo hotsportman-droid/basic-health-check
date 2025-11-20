@@ -3,14 +3,7 @@ import React from 'react';
 import type { HealthCheckItem } from './types';
 import { HeartIcon, LungIcon, MouthIcon, SkinIcon, BloodDropIcon, PressureIcon } from './components/icons';
 
-// --- ส่วนตั้งค่าระบบ (System Configuration) ---
-export const SYSTEM_CONFIG = {
-  // 📢 สำคัญมาก: นำ API Key ของท่านมาวางแทนที่ข้อความในวงเล็บด้านล่างนี้
-  // เมื่อใส่แล้ว ผู้ใช้งานทุกคนจะใช้งานได้ทันทีโดยไม่ต้องตั้งค่าเอง
-  // วิธีทำ: GLOBAL_API_KEY: 'AIzaSy....(รหัสของท่าน)...', 
-  
-  GLOBAL_API_KEY: 'AIzaSyDGQ1SiJuz-xEDxdZPWy3iCTlb8i7PAvm8', 
-};
+// FIX: Removed hardcoded API key configuration to adhere to security guidelines. The API key should be securely managed via environment variables.
 
 export const HEALTH_CHECKS: HealthCheckItem[] = [
   {
