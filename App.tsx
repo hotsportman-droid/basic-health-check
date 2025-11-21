@@ -12,9 +12,13 @@ import { QRCodeModal } from './components/QRCodeModal';
 
 // Base friend count (ฐานจำนวนเพื่อนเริ่มต้น)
 const BASE_FRIEND_COUNT = 450;
-// Namespace & Key (ต้องไม่ซ้ำกับคนอื่น เพื่อให้นับเฉพาะแอปเรา)
+// Namespace & Key (Keep v7 to preserve current count if possible)
 const COUNTER_NAMESPACE = 'dr-rak-official-counter-v7'; 
 const COUNTER_KEY = 'total_friends';
+
+// LocalStorage Keys
+const STORAGE_KEY_VISITED = `visited_${COUNTER_NAMESPACE}`;
+const STORAGE_KEY_LAST_COUNT = `last_count_${COUNTER_NAMESPACE}`;
 
 const App: React.FC = () => {
   const [openAccordion, setOpenAccordion] = React.useState<string | null>('pulse-check');
@@ -23,56 +27,70 @@ const App: React.FC = () => {
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   
-  // 1. Use React State to hold the count
-  const [totalFriends, setTotalFriends] = useState(BASE_FRIEND_COUNT); 
+  // 1. Initialize State from LocalStorage (Persistence)
+  // This prevents the count from flashing back to 450 on refresh if the API fails or lags
+  const [totalFriends, setTotalFriends] = useState(() => {
+    const savedCount = localStorage.getItem(STORAGE_KEY_LAST_COUNT);
+    return savedCount ? parseInt(savedCount, 10) : BASE_FRIEND_COUNT;
+  });
   
-  // Prevent double-fetch in React Strict Mode
   const isMounted = useRef(false);
 
-  // 2. Use useEffect to fetch data on mount
   useEffect(() => {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
     const syncFriendCount = async () => {
-      // Prevent double execution
       if (isMounted.current) return;
       isMounted.current = true;
 
-      // LocalStorage Key to remember this device
-      const storageKey = `visited_${COUNTER_NAMESPACE}`;
-      const hasVisited = localStorage.getItem(storageKey);
+      const hasVisited = localStorage.getItem(STORAGE_KEY_VISITED);
       
-      // Cache Buster: Force browser to fetch new data every time
+      // Cache Buster
       const timestamp = new Date().getTime();
       
       let url = '';
       
       if (!hasVisited) {
-        // Case A: New Device -> Increment (+1)
+        // Case A: New Device -> Increment
         url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up?t=${timestamp}`;
       } else {
-        // Case B: Returning Device -> Read Only (Get latest count)
+        // Case B: Returning Device -> Read Only
         url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}?t=${timestamp}`;
       }
 
       try {
-        const response = await fetch(url);
+        // Force 'no-store' to bypass browser cache completely
+        const response = await fetch(url, { 
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
         if (response.ok) {
           const data = await response.json();
           if (typeof data.count === 'number') {
-            // Update State: Base + API Count
-            setTotalFriends(BASE_FRIEND_COUNT + data.count);
+            const newTotal = BASE_FRIEND_COUNT + data.count;
+            
+            // Update UI
+            setTotalFriends(newTotal);
+            
+            // Update Local Storage (Cache for next refresh)
+            localStorage.setItem(STORAGE_KEY_LAST_COUNT, newTotal.toString());
             
             // Mark as visited
             if (!hasVisited) {
-              localStorage.setItem(storageKey, 'true');
+              localStorage.setItem(STORAGE_KEY_VISITED, 'true');
             }
           }
         }
       } catch (error) {
         console.error("Counter Error:", error);
-        // Fallback: If API fails, we just show the Base count (or previous state)
+        // On error, we intentionally DO NOTHING. 
+        // The state remains at the value loaded from localStorage (e.g., 452 or 454), 
+        // instead of reverting to BASE_FRIEND_COUNT (450).
       }
     };
 
