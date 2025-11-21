@@ -10,11 +10,11 @@ import { Modal } from './components/Modal';
 import { DrRakAvatar } from './components/DrRakAvatar';
 import { QRCodeModal } from './components/QRCodeModal';
 
-// Base friend count
+// Base friend count (ฐานจำนวนเพื่อนเริ่มต้น)
 const BASE_FRIEND_COUNT = 450;
-// Namespace for the counter service (v6)
-const COUNTER_NAMESPACE = 'dr-rak-health-v6';
-const COUNTER_KEY = 'visits';
+// Namespace & Key (ต้องไม่ซ้ำกับคนอื่น เพื่อให้นับเฉพาะแอปเรา)
+const COUNTER_NAMESPACE = 'dr-rak-official-counter-v7'; 
+const COUNTER_KEY = 'total_friends';
 
 const App: React.FC = () => {
   const [openAccordion, setOpenAccordion] = React.useState<string | null>('pulse-check');
@@ -22,83 +22,66 @@ const App: React.FC = () => {
   const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  // Start with a loading state placeholder (Base + 1)
-  const [totalFriends, setTotalFriends] = useState(BASE_FRIEND_COUNT + 1); 
   
-  // Prevent double-firing in React Strict Mode
-  const effectRan = useRef(false);
+  // 1. Use React State to hold the count
+  const [totalFriends, setTotalFriends] = useState(BASE_FRIEND_COUNT); 
+  
+  // Prevent double-fetch in React Strict Mode
+  const isMounted = useRef(false);
 
+  // 2. Use useEffect to fetch data on mount
   useEffect(() => {
-    // Check if iOS
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
-    // --- ROBUST COUNTER LOGIC ---
-    const updateFriendCount = async () => {
-      if (effectRan.current) return;
-      effectRan.current = true;
+    const syncFriendCount = async () => {
+      // Prevent double execution
+      if (isMounted.current) return;
+      isMounted.current = true;
 
-      const storageKey = `dr_rak_reg_${COUNTER_NAMESPACE}`;
-      // Removed local cache reading logic to ensure we ALWAYS show the server's latest count
-
-      const timestamp = Date.now(); // Force bypass browser cache
+      // LocalStorage Key to remember this device
+      const storageKey = `visited_${COUNTER_NAMESPACE}`;
+      const hasVisited = localStorage.getItem(storageKey);
+      
+      // Cache Buster: Force browser to fetch new data every time
+      const timestamp = new Date().getTime();
+      
+      let url = '';
+      
+      if (!hasVisited) {
+        // Case A: New Device -> Increment (+1)
+        url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up?t=${timestamp}`;
+      } else {
+        // Case B: Returning Device -> Read Only (Get latest count)
+        url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}?t=${timestamp}`;
+      }
 
       try {
-        const isRegistered = localStorage.getItem(storageKey);
-        let countValue = 0;
-        let response;
-        let url = '';
-
-        if (!isRegistered) {
-          // CASE: New Device -> Hit /up (Increment)
-          url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up?t=${timestamp}`;
-        } else {
-          // CASE: Existing Device -> Hit / (Read Current)
-          url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}?t=${timestamp}`;
-        }
-
-        response = await fetch(url, {
-            method: 'GET',
-            cache: 'no-store', // Critical: Do not use browser cache
-            headers: {
-                'Pragma': 'no-cache',
-                'Cache-Control': 'no-cache'
-            }
-        });
-
+        const response = await fetch(url);
         if (response.ok) {
-            const data = await response.json();
-            if (data && typeof data.count === 'number') {
-                countValue = data.count;
-                
-                // Update State with FRESH data from server
-                setTotalFriends(BASE_FRIEND_COUNT + countValue);
-                
-                // Mark as registered if new
-                if (!isRegistered) {
-                    localStorage.setItem(storageKey, 'true');
-                    console.log("New Friend Registered! Count:", countValue);
-                } else {
-                    console.log("Welcome back! Latest Count:", countValue);
-                }
+          const data = await response.json();
+          if (typeof data.count === 'number') {
+            // Update State: Base + API Count
+            setTotalFriends(BASE_FRIEND_COUNT + data.count);
+            
+            // Mark as visited
+            if (!hasVisited) {
+              localStorage.setItem(storageKey, 'true');
             }
-        } else {
-            console.warn("Counter API returned non-OK status");
+          }
         }
       } catch (error) {
-        console.error("Counter API Error:", error);
-        // Fallback: The state remains at default (Base+1) or whatever was last rendered
+        console.error("Counter Error:", error);
+        // Fallback: If API fails, we just show the Base count (or previous state)
       }
     };
 
-    updateFriendCount();
+    syncFriendCount();
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
     };
-
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
@@ -188,6 +171,7 @@ const App: React.FC = () => {
               <div className="relative z-10 flex flex-col items-center">
                 <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 text-sm font-bold text-indigo-50 bg-white/10 backdrop-blur-md rounded-full border border-white/20 shadow-sm">
                     <span className="flex h-2.5 w-2.5 rounded-full bg-pink-400 mr-2 animate-pulse shadow-[0_0_8px_rgba(244,114,182,0.6)]"></span>
+                    {/* Display the State variable */}
                     เพื่อนหมอรักษ์ {totalFriends.toLocaleString()} คน
                 </div>
                 
@@ -277,7 +261,6 @@ const App: React.FC = () => {
       <ShareModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
       <QRCodeModal isOpen={isQRCodeModalOpen} onClose={() => setIsQRCodeModalOpen(false)} />
       
-      {/* Install Instruction Modal - Kept for manual trigger fallback if needed, though currently unused via button */}
       <Modal isOpen={isInstallInstructionOpen} onClose={() => setIsInstallInstructionOpen(false)}>
          <div className="text-center p-2">
              <h3 className="text-xl font-bold text-slate-800 mb-4">
