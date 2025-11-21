@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HealthCheckCard } from './components/HealthCheckCard';
 import { BMICalculator } from './components/BMICalculator';
 import { NearbyHospitals } from './components/NearbyHospitals';
@@ -10,12 +10,9 @@ import { Modal } from './components/Modal';
 import { DrRakAvatar } from './components/DrRakAvatar';
 import { QRCodeModal } from './components/QRCodeModal';
 
-// --- COUNTER CONFIGURATION ---
+// --- Final, Vercel-Native Unique Visitor Counter ---
 const BASE_FRIEND_COUNT = 450;
-// Using a new namespace for debugging to ensure a clean slate.
-const COUNTER_NAMESPACE = 'dr-rak-prod-debug-v5';
-const COUNTER_KEY = 'total_friends';
-const STORAGE_KEY_VISITED = `dr_rak_visited_${COUNTER_NAMESPACE}`;
+const COUNTER_API_ENDPOINT = '/api/counter';
 
 const App: React.FC = () => {
   const [openAccordion, setOpenAccordion] = useState<string | null>('pulse-check');
@@ -24,63 +21,59 @@ const App: React.FC = () => {
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   
-  // Initialize state to null to represent a "loading" state.
-  const [totalFriends, setTotalFriends] = useState<number | null>(null);
+  const [totalFriends, setTotalFriends] = useState<number | string>('...');
+  const effectRan = useRef(false);
   
   useEffect(() => {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
-    const syncCounter = async () => {
-      const hasVisited = localStorage.getItem(STORAGE_KEY_VISITED);
-      const action = hasVisited ? 'read' : 'increment';
+    const syncUniqueVisitorCount = async () => {
+      if (effectRan.current) return;
+      effectRan.current = true;
       
-      let endpoint = '';
-      if (action === 'increment') {
-        endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up`;
-      } else {
-        endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}`;
-      }
-
-      console.log(`[Counter] Action: ${action}. Endpoint: ${endpoint}`);
+      // Use a final, clean storage key to ensure everyone is recounted on this version
+      const storageKey = `dr_rak_visited_vercel_upstash_final`;
+      const hasVisited = localStorage.getItem(storageKey);
 
       try {
-        const response = await fetch(endpoint, { cache: 'no-store' });
-        console.log(`[Counter] Response Status: ${response.status}`);
-
-        if (!response.ok) {
-          throw new Error(`API responded with status: ${response.status}`);
+        let response;
+        if (!hasVisited) {
+          // New Visitor: Increment (POST request)
+          console.log("[Counter] New visitor detected. Incrementing count...");
+          response = await fetch(COUNTER_API_ENDPOINT, { method: 'POST' });
+        } else {
+          // Returning Visitor: Read (GET request)
+          console.log("[Counter] Returning visitor. Reading latest count...");
+          response = await fetch(COUNTER_API_ENDPOINT, { method: 'GET' });
         }
+        
+        if (!response.ok) {
+          throw new Error(`Server responded with status: ${response.status}`);
+        }
+        
         const data = await response.json();
-        console.log('[Counter] Received data from server:', data);
-
+        
         if (typeof data.count === 'number') {
-          const latestTotal = BASE_FRIEND_COUNT + data.count;
-          console.log(`[Counter] Updating display to: ${latestTotal}`);
-          setTotalFriends(latestTotal);
+          const realTotal = BASE_FRIEND_COUNT + data.count;
+          setTotalFriends(realTotal);
           
-          if (action === 'increment') {
-            localStorage.setItem(STORAGE_KEY_VISITED, 'true');
-            console.log('[Counter] Marked this device as "visited".');
+          // Only mark as visited AFTER a successful increment.
+          if (!hasVisited) {
+            localStorage.setItem(storageKey, 'true');
+            console.log("[Counter] Successfully incremented and marked as visited.");
           }
         } else {
-          throw new Error("Invalid data format from API");
+            throw new Error('Invalid count format from server');
         }
+
       } catch (error) {
-        console.error("[Counter] Sync failed. UI will remain in loading state.", error);
-        // The UI will continue to show the "..." loading indicator if the fetch fails.
+        console.error("[Counter] API call failed.", error);
+        // Per user request, do not fallback. UI will remain in loading state.
       }
     };
 
-    syncCounter();
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
+    syncUniqueVisitorCount();
   }, []);
 
   const handleShare = async () => {
@@ -161,18 +154,12 @@ const App: React.FC = () => {
               {/* Decorative Background Elements */}
               <div className="absolute top-0 left-0 -translate-x-1/4 -translate-y-1/4 w-96 h-96 bg-white opacity-10 rounded-full blur-3xl pointer-events-none"></div>
               <div className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 w-96 h-96 bg-teal-400 opacity-20 rounded-full blur-3xl pointer-events-none"></div>
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbGSPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjwvc3ZnPg==')] [mask-image:radial-gradient(black,transparent_70%)] pointer-events-none"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjwvc3ZnPg==')] [mask-image:radial-gradient(black,transparent_70%)] pointer-events-none"></div>
 
               <div className="relative z-10 flex flex-col items-center">
                 <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 text-sm font-bold text-indigo-50 bg-white/10 backdrop-blur-md rounded-full border border-white/20 shadow-sm">
-                    <span className="flex h-2.5 w-2.5 rounded-full bg-pink-400 mr-2 animate-pulse shadow-[0_0_8px_rgba(44,114,182,0.6)]"></span>
-                    <span className="mr-2">เพื่อนหมอรักษ์</span>
-                    {totalFriends === null ? (
-                      <span className="w-12 inline-block text-left animate-pulse">...</span>
-                    ) : (
-                      <span>{totalFriends.toLocaleString()}</span>
-                    )}
-                    <span className="ml-1">คน</span>
+                    <span className="flex h-2.5 w-2.5 rounded-full bg-teal-300 mr-2 animate-pulse shadow-[0_0_8px_rgba(45,212,191,0.8)]"></span>
+                    เพื่อนหมอรักษ์ {typeof totalFriends === 'number' ? totalFriends.toLocaleString() : totalFriends} คน
                 </div>
                 
                 <h2 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 drop-shadow-md leading-tight">
@@ -261,6 +248,7 @@ const App: React.FC = () => {
       <ShareModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
       <QRCodeModal isOpen={isQRCodeModalOpen} onClose={() => setIsQRCodeModalOpen(false)} />
       
+      {/* Install Instruction Modal - Kept for manual trigger fallback if needed, though currently unused via button */}
       <Modal isOpen={isInstallInstructionOpen} onClose={() => setIsInstallInstructionOpen(false)}>
          <div className="text-center p-2">
              <h3 className="text-xl font-bold text-slate-800 mb-4">
