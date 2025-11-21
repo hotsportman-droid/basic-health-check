@@ -114,6 +114,9 @@ export const DrRakAvatar: React.FC = () => {
     const recognitionRef = useRef<any>(null);
     const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
     const wakeWordDetectedRef = useRef(false);
+    const silenceTimerRef = useRef<number | null>(null);
+    const speechDetectedInSessionRef = useRef(false);
+    const SILENCE_DELAY = 2500; // 2.5 seconds
 
     // --- Voice Synthesis Setup ---
     useEffect(() => {
@@ -171,7 +174,6 @@ export const DrRakAvatar: React.FC = () => {
         }
     };
     
-    // Use useCallback to ensure handleAnalyze has the latest state when called from recognition events
     const handleAnalyze = React.useCallback(async () => {
         if (!symptoms.trim()) {
             setError("กรุณาบอกอาการเบื้องต้นก่อนค่ะ");
@@ -254,12 +256,18 @@ export const DrRakAvatar: React.FC = () => {
             recognitionRef.current.stop();
         }
         
+        speechDetectedInSessionRef.current = false;
         const recognition = new SpeechRecognition();
         recognition.lang = 'th-TH';
         recognition.interimResults = true;
         recognition.continuous = true;
 
         recognition.onresult = (event: any) => {
+            speechDetectedInSessionRef.current = true;
+            if (silenceTimerRef.current) {
+                clearTimeout(silenceTimerRef.current);
+            }
+
             let finalTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
@@ -280,16 +288,20 @@ export const DrRakAvatar: React.FC = () => {
                  if(finalTranscript) {
                     setSymptoms(prev => (prev.trim() + ' ' + finalTranscript.trim()).trim());
                 }
+                silenceTimerRef.current = window.setTimeout(() => {
+                    if (recognitionRef.current) {
+                        recognitionRef.current.stop();
+                    }
+                }, SILENCE_DELAY);
             }
         };
 
         recognition.onerror = (event: any) => {
-            // Ignore 'no-speech' and 'aborted' errors as they are not critical failures.
-            // 'aborted' is often triggered by our own logic when stopping/restarting recognition.
+             if (silenceTimerRef.current) {
+                clearTimeout(silenceTimerRef.current);
+            }
             if (event.error === 'no-speech' || event.error === 'aborted') {
                 console.warn(`Speech recognition event: ${event.error}`);
-                // If the state is not a listening state, it's safe to go idle.
-                // This prevents getting stuck if the abortion was unexpected.
                 if (!['listening', 'listeningForFollowUp', 'waitingForWakeWord'].includes(interactionStateRef.current)) {
                     setInteractionState('idle');
                 }
@@ -302,12 +314,20 @@ export const DrRakAvatar: React.FC = () => {
         };
 
         recognition.onend = () => {
+            if (silenceTimerRef.current) {
+                clearTimeout(silenceTimerRef.current);
+            }
+
             if (interactionStateRef.current === 'idle') return;
 
             if (interactionStateRef.current === 'listening') {
-                speak("มีอาการอื่นเพิ่มเติมอีกไหมคะ", () => {
-                    startListening('followUp');
-                });
+                if (speechDetectedInSessionRef.current) {
+                    speak("มีอาการอื่นเพิ่มเติมอีกไหมคะ", () => {
+                        startListening('followUp');
+                    });
+                } else {
+                    setInteractionState('idle');
+                }
                 return;
             }
             
@@ -331,6 +351,9 @@ export const DrRakAvatar: React.FC = () => {
     };
 
     const stopListening = () => {
+        if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+        }
         if (recognitionRef.current) {
             recognitionRef.current.onend = null;
             recognitionRef.current.stop();
@@ -347,6 +370,7 @@ export const DrRakAvatar: React.FC = () => {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 stream.getTracks().forEach(track => track.stop());
                 wakeWordDetectedRef.current = false;
+                speechDetectedInSessionRef.current = false;
                 startListening('wakeWord');
             } catch (err) {
                 console.error("Mic permission error:", err);
@@ -368,6 +392,9 @@ export const DrRakAvatar: React.FC = () => {
 
     useEffect(() => {
         return () => {
+            if (silenceTimerRef.current) {
+                clearTimeout(silenceTimerRef.current);
+            }
             if (recognitionRef.current) {
                 recognitionRef.current.stop();
             }
@@ -377,14 +404,6 @@ export const DrRakAvatar: React.FC = () => {
         };
     }, []);
     
-    // Re-add selectedVoice to handleAnalyze dependencies to ensure the callback has the latest voice
-    useEffect(() => {
-        // This is a pattern to update the callback without causing re-renders.
-        // The handleAnalyze is wrapped in useCallback, so we need to ensure its dependencies are correct.
-        // Adding selectedVoice to the dependency array of useCallback is the cleaner way.
-    }, [handleAnalyze]);
-
-
     const handleFindHospitals = () => {
         const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา ใกล้ฉัน");
         const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
@@ -440,7 +459,7 @@ export const DrRakAvatar: React.FC = () => {
         >
           {isAnalyzing ? (
             <>
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
