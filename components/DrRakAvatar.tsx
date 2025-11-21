@@ -35,7 +35,7 @@ export const DrRakAvatar: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<Analysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [statusText, setStatusText] = useState('กดปุ่มไมค์เพื่อเริ่มบอกอาการ...');
+  const [statusText, setStatusText] = useState('กดปุ่มไมค์เพื่อเริ่มปรึกษา...');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -82,7 +82,7 @@ export const DrRakAvatar: React.FC = () => {
     } catch (e) { console.error("Failed to load history:", e)}
 
     if (!SpeechRecognition) {
-      setStatusText('ขออภัยค่ะ เบราว์เซอร์ของคุณไม่รองรับการสั่งการด้วยเสียง');
+      setStatusText('ขออภัยค่ะ เบราว์เซอร์นี้ไม่รองรับการสั่งการด้วยเสียง');
       return;
     }
 
@@ -112,14 +112,14 @@ export const DrRakAvatar: React.FC = () => {
         setSymptoms(prev => (prev + ' ' + finalTranscript).trim());
       }
 
-      setStatusText(interimTranscript ? 'กำลังฟัง: ' + interimTranscript : 'กำลังฟัง...');
+      setStatusText(interimTranscript ? '... ' + interimTranscript : 'กำลังฟัง... (พูดจบแล้วหยุดสักครู่)');
 
-      // Auto-submit after silence
+      // Auto-submit after silence (slightly longer duration for better usability)
       silenceTimerRef.current = window.setTimeout(() => {
         if (symptomsRef.current.trim().length > 0) {
             handleAnalysis();
         }
-      }, 2000);
+      }, 2500);
     };
     
     recognition.onend = () => {
@@ -139,7 +139,7 @@ export const DrRakAvatar: React.FC = () => {
     recognition.onerror = (event: any) => {
         if (event.error !== 'aborted' && event.error !== 'no-speech') {
             if (stateRef.current === 'listening') {
-                 updateStateAndStatus('idle', 'เกิดข้อผิดพลาดในการรับเสียง');
+                 updateStateAndStatus('idle', 'เกิดข้อผิดพลาดในการรับเสียง ลองใหม่อีกครั้งนะคะ');
             }
         }
     };
@@ -161,54 +161,66 @@ export const DrRakAvatar: React.FC = () => {
     setStatusText(text);
   };
   
-  const speak = (text: string, onEndCallback: () => void = () => {}) => {
+  const speak = (text: string) => {
     if (isMutedRef.current) {
-      console.log("[Muted] Dr. Rak would say:", text);
-      setTimeout(onEndCallback, 1500);
+      updateStateAndStatus('idle', 'ปิดเสียงอยู่ค่ะ (เปิดเสียงที่มุมขวาบน)');
       return;
     }
 
     if (!window.speechSynthesis) {
-        onEndCallback();
+        updateStateAndStatus('idle', 'อุปกรณ์นี้ไม่รองรับการอ่านเสียงค่ะ');
         return;
     }
     
+    // Stop any current speech
     window.speechSynthesis.cancel();
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'th-TH';
     
-    // Robust voice selection
-    const thaiVoice = voices.find(v => v.lang.includes('th')) || 
-                      voices.find(v => v.lang.includes('TH'));
+    // Robust voice selection: Try Thai voices, fallback to any.
+    const thaiVoice = voices.find(v => v.lang === 'th-TH') || 
+                      voices.find(v => v.lang.includes('th'));
     
     if (thaiVoice) {
       utterance.voice = thaiVoice;
     }
     
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
+    utterance.rate = 0.9; // Slightly slower for clarity
+    utterance.pitch = 1.1; // Slightly higher for a female doctor persona
 
-    let callbackCalled = false;
-    const handleEnd = () => {
-        if (!callbackCalled) {
-            callbackCalled = true;
-            onEndCallback();
-        }
+    utterance.onstart = () => {
+         updateStateAndStatus('speaking', 'หมอรักษ์กำลังพูด... (กดปุ่มเพื่อหยุด)');
     };
 
-    utterance.onend = handleEnd;
+    utterance.onend = () => {
+         updateStateAndStatus('idle', 'หากมีอาการเพิ่มเติม กดปุ่มไมค์ได้เลยนะคะ');
+    };
+
     utterance.onerror = (e) => {
         console.error("TTS Error:", e);
-        handleEnd();
+        // If TTS fails (often due to user interaction policy on mobile), reset to idle
+        updateStateAndStatus('idle', 'กดที่ "ฟังเสียงอีกครั้ง" เพื่อฟังคำแนะนำค่ะ');
     };
     
-    window.setTimeout(() => window.speechSynthesis.speak(utterance), 50);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const stopSpeaking = () => {
+      if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+          updateStateAndStatus('idle', 'หยุดพูดแล้วค่ะ');
+      }
   };
 
   const startListening = () => {
     if (recognitionRef.current) {
+      // Stop TTS if playing
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+
       try {
         recognitionRef.current.stop();
+        // Short delay to ensure clean restart
         setTimeout(() => {
              updateStateAndStatus('listening', 'กำลังฟัง... เล่าอาการได้เลยค่ะ');
              setSymptoms('');
@@ -217,6 +229,7 @@ export const DrRakAvatar: React.FC = () => {
                 recognitionRef.current.start();
              } catch(e) {
                 console.error("Error starting recognition:", e);
+                updateStateAndStatus('idle', 'ไม่สามารถเริ่มไมโครโฟนได้');
              }
         }, 100);
       } catch(e) {
@@ -233,26 +246,36 @@ export const DrRakAvatar: React.FC = () => {
     }
   };
 
-  const handleMicClick = async () => {
+  const handleMainButtonClick = async () => {
+    // Logic based on current state
     if (interactionState === 'idle') {
+        // Request permission and start
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach(track => track.stop());
+            stream.getTracks().forEach(track => track.stop()); // Close immediately, just need permission
             startListening();
         } catch (err) {
             console.error('Microphone permission denied:', err);
             setStatusText('กรุณาอนุญาตให้ใช้ไมโครโฟนค่ะ');
         }
-    } else {
-        stopListening();
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        window.speechSynthesis.cancel();
-        updateStateAndStatus('idle', 'กดปุ่มไมค์เพื่อเริ่มบอกอาการ...');
+    } else if (interactionState === 'listening') {
+        // Stop listening and analyze immediately
+        handleAnalysis();
+    } else if (interactionState === 'speaking') {
+        // Stop speaking
+        stopSpeaking();
+    } else if (interactionState === 'analyzing') {
+        // Do nothing while analyzing
     }
   };
 
+  // Helper to build natural speech
   const constructResponseText = (result: Analysis) => {
-      return `จากการวิเคราะห์อาการนะคะ ${result.assessment} หมอขอแนะนำวิธีการดูแลตัวเองเบื้องต้นดังนี้ค่ะ ${result.recommendation} สิ่งที่ต้องระวังเป็นพิเศษคือ ${result.warning} หากอาการไม่ดีขึ้น แนะนำให้ไปพบแพทย์นะคะ`;
+      // Convert Markdown-like lists or short phrases into full spoken sentences
+      // Replace common symbols that TTS might skip
+      const spokenRecommend = result.recommendation.replace(/-/g, 'ข้อที่ ');
+      
+      return `จากการประเมินอาการนะคะ คนไข้ ${result.assessment}. สำหรับคำแนะนำในการดูแลตัวเองเบื้องต้น. ${spokenRecommend}. และสิ่งที่คนไข้ต้องระวังเป็นพิเศษคือ. ${result.warning}. หากอาการไม่ดีขึ้น แนะนำให้ไปโรงพยาบาลนะคะ`;
   };
 
   const handleAnalysis = async () => {
@@ -260,33 +283,39 @@ export const DrRakAvatar: React.FC = () => {
     stopListening();
 
     if (!symptomsRef.current.trim()) {
-        updateStateAndStatus('idle', 'ไม่ได้ระบุอาการ โปรดลองอีกครั้ง');
+        updateStateAndStatus('idle', 'หมอยังไม่ได้ยินเสียงคนไข้เลยค่ะ ลองใหม่อีกครั้งนะคะ');
         return;
     }
     
-    updateStateAndStatus('analyzing', 'กำลังวิเคราะห์อาการ... กรุณารอสักครู่ค่ะ');
+    updateStateAndStatus('analyzing', 'กำลังวิเคราะห์ข้อมูล... สักครู่นะคะ');
     setIsLoading(true);
 
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
-      updateStateAndStatus('idle', 'เกิดข้อผิดพลาดในการตั้งค่าระบบ');
+      updateStateAndStatus('idle', 'ระบบขัดข้อง (API Key)');
       setIsLoading(false);
       return;
     }
     const ai = new GoogleGenAI({ apiKey });
 
     const prompt = `
-      คุณคือ "หมอรักษ์" ผู้ช่วย AI ด้านสุขภาพที่มีความเชี่ยวชาญและเป็นกันเอง
-      - ห้ามวินิจฉัยโรคเด็ดขาด ให้ระบุเป็นแนวโน้มหรือสาเหตุที่เป็นไปได้
-      - ให้คำแนะนำการดูแลตัวเองที่บ้านอย่างละเอียด เป็นขั้นตอน (Step-by-step) และปฏิบัติได้จริง
-      - อธิบายด้วยภาษาที่เข้าใจง่าย อ่อนโยน เหมือนคุยกับคุณหมอใจดี
-      - ตอบกลับเป็น JSON object เท่านั้น โดยไม่มี Markdown code block:
+      Role: คุณคือ "หมอรักษ์" แพทย์หญิงผู้เชี่ยวชาญที่มีความเห็นอกเห็นใจ
+      Task: วิเคราะห์อาการสุขภาพจากข้อความ
+      Tone: สุภาพ, อ่อนโยน, ใช้ภาษาพูดที่เป็นธรรมชาติ (Spoken Language), **ต้องเรียกผู้ใช้งานว่า "คนไข้" ทุกครั้ง**
+      
+      Input Symptoms: "${symptomsRef.current}"
+
+      Requirement:
+      1. Assessment: ประเมินแนวโน้มอาการ (ห้ามฟันธงโรค) พูดเหมือนคุยกับคนไข้
+      2. Recommendation: แนะนำวิธีดูแลตัวเองที่บ้าน 3-4 ข้อ แบบละเอียด เข้าใจง่าย
+      3. Warning: อาการที่ต้องรีบไปพบแพทย์ทันที
+
+      Response Format (JSON Only):
       {
-        "assessment": "วิเคราะห์สาเหตุที่เป็นไปได้ของอาการอย่างละเอียด",
-        "recommendation": "คำแนะนำการดูแลตัวเองอย่างละเอียด เป็นข้อๆ",
-        "warning": "สัญญาณเตือนที่ควรไปพบแพทย์ทันที"
+        "assessment": "ข้อความประเมินอาการ (เช่น 'จากอาการที่คนไข้เล่ามา หมอคิดว่าคนไข้น่าจะมีภาวะ...')",
+        "recommendation": "ข้อความแนะนำ (เช่น 'หมอแนะนำให้คนไข้ดื่มน้ำมากๆ และพักผ่อน...')",
+        "warning": "ข้อควรระวัง (เช่น 'แต่ถ้าคนไข้มีไข้สูงเกิน 38 องศา ควรรีบไปพบแพทย์นะคะ')"
       }
-      อาการ: "${symptomsRef.current}"
     `;
 
     try {
@@ -310,15 +339,12 @@ export const DrRakAvatar: React.FC = () => {
 
       const responseToSpeak = constructResponseText(parsedResult);
       
-      updateStateAndStatus('speaking', 'หมอรักษ์กำลังพูด...');
-      // Speak immediately after analysis is ready
-      speak(responseToSpeak, () => {
-        updateStateAndStatus('idle', 'ปรึกษาอีกครั้ง กดปุ่มไมค์ได้เลยค่ะ');
-      });
+      // Attempt to speak automatically
+      speak(responseToSpeak);
 
     } catch (error) {
       console.error('Error analyzing symptoms:', error);
-      updateStateAndStatus('idle', 'เกิดข้อผิดพลาดในการวิเคราะห์');
+      updateStateAndStatus('idle', 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว');
     } finally {
       setIsLoading(false);
     }
@@ -333,7 +359,7 @@ export const DrRakAvatar: React.FC = () => {
   };
 
   const clearHistory = () => {
-      if (window.confirm('คุณต้องการลบประวัติการปรึกษาทั้งหมดหรือไม่?')) {
+      if (window.confirm('ลบประวัติทั้งหมดไหมคะ?')) {
           setHistory([]);
           localStorage.removeItem('dr_rak_history');
       }
@@ -363,69 +389,100 @@ export const DrRakAvatar: React.FC = () => {
           <div className="relative shrink-0">
             <DrRakSvgAvatar className="w-32 h-32 shadow-lg" />
             <div className={`absolute inset-0 rounded-full border-4 border-indigo-500 transition-all duration-500 pointer-events-none ${interactionState === 'listening' ? 'animate-pulse opacity-100' : 'opacity-0 scale-125'}`}></div>
+            {interactionState === 'speaking' && (
+                 <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1 shadow-md animate-bounce">
+                    <SpeakerWaveIcon className="w-6 h-6 text-indigo-500" />
+                 </div>
+            )}
           </div>
 
           <div className="w-full">
             <textarea
               value={symptoms}
               onChange={(e) => setSymptoms(e.target.value)}
-              placeholder="อาการของคุณจะปรากฏที่นี่..."
-              className="w-full h-28 p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+              placeholder="กดปุ่มไมค์ แล้วเล่าอาการให้หมอฟังได้เลยค่ะ..."
+              className="w-full h-28 p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none"
               readOnly={interactionState !== 'idle' && interactionState !== 'listening'}
             />
-            <div className="flex items-center justify-end gap-2 mt-2">
-                <button
-                    onClick={handleMicClick}
-                    disabled={isLoading || interactionState === 'analyzing' || interactionState === 'speaking'}
-                    className={`px-4 py-2 rounded-lg font-bold text-white transition-all flex items-center gap-2 shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
-                        interactionState === 'idle' 
-                        ? 'bg-indigo-600 hover:bg-indigo-700' 
-                        : 'bg-red-600 hover:bg-red-700'
-                    }`}
-                >
-                    {interactionState === 'idle' ? <MicIcon className="w-5 h-5"/> : <StopIcon className="w-5 h-5"/>}
-                    <span>{interactionState === 'idle' ? 'กดเพื่อพูดอาการ' : 'หยุด / ส่ง'}</span>
-                </button>
+            
+            <div className="flex items-center justify-between mt-3">
+                 <p className="text-xs text-slate-400 hidden md:block">
+                    *หากไม่สะดวกถือโทรศัพท์ สามารถวางไว้ใกล้ตัวแล้วพูดได้เลยค่ะ
+                 </p>
+                 <div className="flex-1 md:flex-none flex justify-end">
+                    <button
+                        onClick={handleMainButtonClick}
+                        disabled={isLoading || interactionState === 'analyzing'}
+                        className={`w-full md:w-auto px-6 py-2.5 rounded-full font-bold text-white transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            interactionState === 'idle' 
+                            ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' 
+                            : interactionState === 'listening'
+                                ? 'bg-red-500 hover:bg-red-600 shadow-red-200 animate-pulse'
+                                : interactionState === 'speaking'
+                                    ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200'
+                                    : 'bg-gray-400'
+                        }`}
+                    >
+                        {interactionState === 'idle' && <><MicIcon className="w-5 h-5"/> พูดอาการ</>}
+                        {interactionState === 'listening' && <><StopIcon className="w-5 h-5"/> หยุด / ส่ง</>}
+                        {interactionState === 'analyzing' && <span>กำลังคิด...</span>}
+                        {interactionState === 'speaking' && <><VolumeOffIcon className="w-5 h-5"/> หยุดพูด</>}
+                    </button>
+                 </div>
             </div>
+            <p className="text-xs text-slate-400 mt-2 text-center md:hidden">
+                *วางโทรศัพท์ไว้ใกล้ตัวแล้วกดปุ่มพูดได้เลยค่ะ
+            </p>
           </div>
         </div>
       </div>
 
       {(isLoading || analysisResult) && (
         <div className="bg-slate-50/70 p-6 border-t border-slate-200 animate-fade-in">
-          {isLoading && <div className="text-center text-slate-600">กำลังวิเคราะห์...</div>}
+          {isLoading && (
+              <div className="flex flex-col items-center justify-center py-4 space-y-3">
+                  <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-indigo-600 text-sm font-medium animate-pulse">หมอกำลังวิเคราะห์อาการ...</p>
+              </div>
+          )}
           {analysisResult && !isLoading && (
-            <div className="space-y-4 text-sm">
+            <div className="space-y-5 text-sm">
                  <div className="flex justify-end">
                     <button 
                         onClick={() => speak(constructResponseText(analysisResult))}
-                        className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold flex items-center gap-1"
+                        className="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 rounded-lg border border-indigo-100 transition-colors"
                     >
                         <SpeakerWaveIcon className="w-4 h-4" /> ฟังเสียงอีกครั้ง
                     </button>
                  </div>
-                <div>
-                    <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-1"><CheckCircleIcon className="w-5 h-5 text-green-500"/> การประเมินเบื้องต้น</h4>
-                    <p className="text-slate-600 pl-7 whitespace-pre-line">{analysisResult.assessment}</p>
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2 text-base">
+                        <CheckCircleIcon className="w-6 h-6 text-teal-500"/> ผลการประเมิน
+                    </h4>
+                    <p className="text-slate-600 leading-relaxed">{analysisResult.assessment}</p>
                 </div>
-                 <div>
-                    <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-1"><StethoscopeIcon className="w-5 h-5 text-blue-500"/> คำแนะนำ</h4>
-                    <p className="text-slate-600 pl-7 whitespace-pre-line">{analysisResult.recommendation}</p>
+                 <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2 text-base">
+                        <StethoscopeIcon className="w-6 h-6 text-blue-500"/> คำแนะนำจากหมอ
+                    </h4>
+                    <p className="text-slate-600 leading-relaxed">{analysisResult.recommendation}</p>
                 </div>
-                 <div>
-                    <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-1"><ExclamationIcon className="w-5 h-5 text-red-500"/> ข้อควรระวัง</h4>
-                    <p className="text-slate-600 pl-7 whitespace-pre-line">{analysisResult.warning}</p>
+                 <div className="bg-red-50 p-4 rounded-xl border border-red-100 shadow-sm">
+                    <h4 className="font-bold text-red-700 flex items-center gap-2 mb-2 text-base">
+                        <ExclamationIcon className="w-6 h-6 text-red-500"/> ข้อควรระวัง
+                    </h4>
+                    <p className="text-red-600 leading-relaxed">{analysisResult.warning}</p>
                 </div>
                 {showHospitalButton && (
-                    <div className="pt-4 text-center">
+                    <div className="pt-2 text-center">
                         <button 
                          onClick={() => {
                             const query = encodeURIComponent("โรงพยาบาล คลินิก และร้านขายยา ใกล้ฉัน");
                             window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
                          }}
-                         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors">
+                         className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-200 hover:scale-105 transition-transform">
                             <MapPinIcon className="w-5 h-5" />
-                            ค้นหาสถานพยาบาลใกล้เคียง
+                            ค้นหาสถานพยาบาลใกล้ฉัน
                         </button>
                     </div>
                 )}
@@ -438,56 +495,48 @@ export const DrRakAvatar: React.FC = () => {
       <div className="bg-white border-t border-slate-200">
          <button
             onClick={() => setIsHistoryOpen(o => !o)}
-            className="w-full p-4 text-left flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="w-full p-4 text-left flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 hover:bg-slate-50 transition-colors"
             aria-expanded={isHistoryOpen}
           >
             <div className="flex items-center">
               <HistoryIcon className="w-5 h-5 text-slate-500 mr-3"/>
               <h4 className="font-bold text-slate-700 text-sm">ประวัติการปรึกษา ({history.length})</h4>
             </div>
-            <ChevronDownIcon className={`w-6 h-6 text-slate-400 transition-transform duration-300 ${isHistoryOpen ? 'rotate-180' : ''}`} />
+            <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${isHistoryOpen ? 'rotate-180' : ''}`} />
         </button>
         <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isHistoryOpen ? 'max-h-[500px] overflow-y-auto' : 'max-h-0'}`}>
             <div className="p-4 pt-0">
                 {history.length > 0 ? (
                     <div className="space-y-4">
                         {history.map(item => (
-                            <div key={item.id} className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm">
-                                <p className="font-semibold text-slate-700 text-xs mb-3 pb-2 border-b border-slate-200">{item.date}</p>
+                            <div key={item.id} className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm hover:border-indigo-200 transition-colors">
+                                <div className="flex justify-between items-start mb-3 pb-2 border-b border-slate-200">
+                                    <span className="font-semibold text-slate-700 text-xs bg-white px-2 py-1 rounded border border-slate-200">{item.date}</span>
+                                </div>
                                 <div className="space-y-3">
                                     <div>
                                         <h5 className="font-bold text-slate-800 flex items-center gap-2 mb-1 text-xs">
-                                            <UserIcon className="w-4 h-4 text-gray-500"/> อาการที่คุณแจ้ง
+                                            <UserIcon className="w-4 h-4 text-gray-500"/> อาการคนไข้
                                         </h5>
-                                        <p className="text-slate-600 pl-6 text-xs">{item.symptoms}</p>
+                                        <p className="text-slate-600 pl-6 text-xs italic">"{item.symptoms}"</p>
                                     </div>
                                     <div>
                                         <h5 className="font-bold text-slate-800 flex items-center gap-2 mb-1 text-xs">
-                                            <CheckCircleIcon className="w-4 h-4 text-green-500"/> การประเมินเบื้องต้น
+                                            <CheckCircleIcon className="w-4 h-4 text-green-500"/> ผลประเมิน
                                         </h5>
-                                        <p className="text-slate-600 pl-6 text-xs">{item.analysis.assessment}</p>
-                                    </div>
-                                    <div>
-                                        <h5 className="font-bold text-slate-800 flex items-center gap-2 mb-1 text-xs">
-                                            <StethoscopeIcon className="w-4 h-4 text-blue-500"/> คำแนะนำ
-                                        </h5>
-                                        <p className="text-slate-600 pl-6 text-xs">{item.analysis.recommendation}</p>
-                                    </div>
-                                    <div>
-                                        <h5 className="font-bold text-slate-800 flex items-center gap-2 mb-1 text-xs">
-                                            <ExclamationIcon className="w-4 h-4 text-red-500"/> ข้อควรระวัง
-                                        </h5>
-                                        <p className="text-slate-600 pl-6 text-xs">{item.analysis.warning}</p>
+                                        <p className="text-slate-600 pl-6 text-xs line-clamp-2">{item.analysis.assessment}</p>
                                     </div>
                                 </div>
                             </div>
                         ))}
-                        <div className="text-center pt-2">
-                           <button onClick={clearHistory} className="text-xs text-red-500 hover:text-red-700">ล้างประวัติทั้งหมด</button>
+                        <div className="text-center pt-2 pb-2">
+                           <button onClick={clearHistory} className="text-xs text-red-500 hover:text-red-700 font-medium underline decoration-red-200 hover:decoration-red-500">ล้างประวัติทั้งหมด</button>
                         </div>
                     </div>
                 ) : (
-                    <p className="text-center text-sm text-slate-500 py-4">ยังไม่มีประวัติการปรึกษา</p>
+                    <div className="text-center py-6 text-slate-400">
+                        <p className="text-sm">ยังไม่มีประวัติการปรึกษา</p>
+                    </div>
                 )}
             </div>
         </div>
