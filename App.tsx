@@ -12,7 +12,7 @@ import { QRCodeModal } from './components/QRCodeModal';
 
 // Base friend count
 const BASE_FRIEND_COUNT = 450;
-// Namespace for the counter service (v6 for fresh start)
+// Namespace for the counter service (v6)
 const COUNTER_NAMESPACE = 'dr-rak-health-v6';
 const COUNTER_KEY = 'visits';
 
@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  // Start with a loading state placeholder (Base + 1)
   const [totalFriends, setTotalFriends] = useState(BASE_FRIEND_COUNT + 1); 
   
   // Prevent double-firing in React Strict Mode
@@ -38,44 +39,47 @@ const App: React.FC = () => {
       effectRan.current = true;
 
       const storageKey = `dr_rak_reg_${COUNTER_NAMESPACE}`;
-      const cacheCountKey = `dr_rak_last_count_${COUNTER_NAMESPACE}`;
-      const timestamp = Date.now(); // Cache buster
+      // Removed local cache reading logic to ensure we ALWAYS show the server's latest count
+
+      const timestamp = Date.now(); // Force bypass browser cache
 
       try {
-        // 1. Try to load from local cache first (fast display)
-        const savedCount = localStorage.getItem(cacheCountKey);
-        if (savedCount) {
-            setTotalFriends(BASE_FRIEND_COUNT + parseInt(savedCount, 10));
-        }
-
         const isRegistered = localStorage.getItem(storageKey);
         let countValue = 0;
         let response;
+        let url = '';
 
         if (!isRegistered) {
           // CASE: New Device -> Hit /up (Increment)
-          // Adding timestamp to URL to strictly avoid browser cache
-          response = await fetch(`https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up?t=${timestamp}`);
+          url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up?t=${timestamp}`;
         } else {
           // CASE: Existing Device -> Hit / (Read Current)
-          response = await fetch(`https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}?t=${timestamp}`);
+          url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}?t=${timestamp}`;
         }
+
+        response = await fetch(url, {
+            method: 'GET',
+            cache: 'no-store', // Critical: Do not use browser cache
+            headers: {
+                'Pragma': 'no-cache',
+                'Cache-Control': 'no-cache'
+            }
+        });
 
         if (response.ok) {
             const data = await response.json();
             if (data && typeof data.count === 'number') {
                 countValue = data.count;
                 
-                // Success: Update State & Cache
+                // Update State with FRESH data from server
                 setTotalFriends(BASE_FRIEND_COUNT + countValue);
-                localStorage.setItem(cacheCountKey, countValue.toString());
                 
                 // Mark as registered if new
                 if (!isRegistered) {
                     localStorage.setItem(storageKey, 'true');
-                    console.log("New Friend Registered!", countValue);
+                    console.log("New Friend Registered! Count:", countValue);
                 } else {
-                    console.log("Welcome back!", countValue);
+                    console.log("Welcome back! Latest Count:", countValue);
                 }
             }
         } else {
@@ -83,7 +87,7 @@ const App: React.FC = () => {
         }
       } catch (error) {
         console.error("Counter API Error:", error);
-        // Fallback: The state is already set from local cache (if exists) or default (Base+1)
+        // Fallback: The state remains at default (Base+1) or whatever was last rendered
       }
     };
 
