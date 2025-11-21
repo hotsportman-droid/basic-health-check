@@ -13,20 +13,18 @@ import { QRCodeModal } from './components/QRCodeModal';
 // --- COUNTER CONFIGURATION ---
 const BASE_FRIEND_COUNT = 450;
 // Using a final, clean namespace for the production counter
-const COUNTER_NAMESPACE = 'dr-rak-prod-final-v2';
+const COUNTER_NAMESPACE = 'dr-rak-prod-final-v3';
 const COUNTER_KEY = 'total_friends';
 const STORAGE_KEY_VISITED = `dr_rak_visited_${COUNTER_NAMESPACE}`;
-const STORAGE_KEY_CACHED_COUNT = `dr_rak_cached_${COUNTER_NAMESPACE}`;
 
 const App: React.FC = () => {
-  // Fix: Changed React.useState to useState for consistency.
   const [openAccordion, setOpenAccordion] = useState<string | null>('pulse-check');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   
-  // Initialize state to null to represent a "loading" state
+  // Initialize state to null to represent a "loading" state. No fallback to local storage.
   const [totalFriends, setTotalFriends] = useState<number | null>(null);
   
   useEffect(() => {
@@ -40,35 +38,33 @@ const App: React.FC = () => {
       let endpoint = '';
       let isIncrementing = false;
       
-      // 1. ตรวจสอบว่าเป็นเครื่องใหม่หรือไม่
+      // 1. Check if this is a new visitor
       if (!hasVisited) {
-        // เครื่องใหม่: เตรียมส่งคำสั่ง +1 (increment)
+        // New visitor: Prepare to send an increment command
         endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up${cacheBuster}`;
         isIncrementing = true;
       } else {
-        // เครื่องเก่า: เตรียมส่งคำสั่ง "ขอดูค่าล่าสุด" (read)
+        // Returning visitor: Prepare to send a "read latest value" command
         endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}${cacheBuster}`;
       }
 
       try {
-        // 2. ส่งคำสั่งไปที่ Server เสมอ
+        // 2. Always fetch from the server
         const response = await fetch(endpoint);
         if (!response.ok) {
+          // If the server responds with an error, stop and log it. The UI will remain in the loading state.
           throw new Error(`API responded with status: ${response.status}`);
         }
         const data = await response.json();
 
-        // 3. รอ Server ตอบกลับสำเร็จแล้วค่อยทำงาน
+        // 3. Only proceed after a successful server response
         if (typeof data.count === 'number') {
           const latestTotal = BASE_FRIEND_COUNT + data.count;
           
-          // 3.1 แสดงผลค่าล่าสุดที่ได้จาก Server
+          // 3.1. Display the latest value from the server
           setTotalFriends(latestTotal);
           
-          // 3.2 บันทึกค่าล่าสุดไว้เผื่อเน็ตหลุดครั้งหน้า (Fallback Cache)
-          localStorage.setItem(STORAGE_KEY_CACHED_COUNT, latestTotal.toString());
-          
-          // 3.3 (สำคัญ) ถ้าเป็นการบวกเลขสำเร็จ ค่อยบันทึกว่า "เครื่องนี้นับแล้ว"
+          // 3.2. (Crucial) If the increment was successful, only then mark this device as "visited"
           if (isIncrementing) {
             localStorage.setItem(STORAGE_KEY_VISITED, 'true');
           }
@@ -76,15 +72,9 @@ const App: React.FC = () => {
           throw new Error("Invalid data format from API");
         }
       } catch (error) {
-        console.error("Counter sync failed:", error);
-        // กรณีฉุกเฉิน: ถ้า Server ล่ม/เน็ตหลุด ให้ดึงค่าล่าสุดที่เคยจำไว้มาแสดงก่อน
-        const cachedCount = localStorage.getItem(STORAGE_KEY_CACHED_COUNT);
-        if (cachedCount) {
-          setTotalFriends(parseInt(cachedCount, 10));
-        } else {
-          // ถ้าไม่มีค่าในเครื่องเลย ให้แสดงค่าเริ่มต้น
-          setTotalFriends(BASE_FRIEND_COUNT);
-        }
+        console.error("Counter sync failed. The UI will remain in a loading state.", error);
+        // NO FALLBACK. Per user instruction, do not use cached data if the API fails.
+        // The UI will continue to show the "..." loading indicator.
       }
     };
 
