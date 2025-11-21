@@ -96,6 +96,11 @@ export const DrRakAvatar: React.FC = () => {
       _setInteractionState(state);
     };
 
+    const symptomsRef = useRef(symptoms);
+    useEffect(() => {
+        symptomsRef.current = symptoms;
+    }, [symptoms]);
+
     const [isMuted, setIsMuted] = useState(false);
     const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
     const recognitionRef = useRef<any>(null);
@@ -138,8 +143,11 @@ export const DrRakAvatar: React.FC = () => {
             if (selectedVoice) utterance.voice = selectedVoice;
 
             utterance.onend = () => {
-                if (!onEndCallback) setInteractionState('idle');
-                if (onEndCallback) onEndCallback();
+                if (onEndCallback) {
+                    onEndCallback();
+                } else {
+                    setInteractionState('idle');
+                }
             };
             utteranceRef.current = utterance;
             window.speechSynthesis.cancel();
@@ -150,7 +158,8 @@ export const DrRakAvatar: React.FC = () => {
     };
     
     const handleAnalyze = React.useCallback(async () => {
-        if (!symptoms.trim()) {
+        const currentSymptoms = symptomsRef.current;
+        if (!currentSymptoms.trim()) {
             setError("กรุณาบอกอาการเบื้องต้นก่อนค่ะ");
             return;
         }
@@ -163,14 +172,22 @@ export const DrRakAvatar: React.FC = () => {
         try {
             if (!process.env.API_KEY) throw new Error("API key is not configured.");
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const instruction = `คุณคือ "หมอรักษ์" AI ผู้ช่วยสุขภาพ...[ASSESSMENT]...(การประเมิน)...[RECOMMENDATION]...(คำแนะนำ)...[WARNING]...(สัญญาณอันตราย)...อาการของผู้ใช้: "${symptoms}"`;
+            const instruction = `คุณคือ "หมอรักษ์" AI ผู้ช่วยสุขภาพวิเคราะห์อาการเบื้องต้นจากข้อมูลที่ได้รับอย่างละเอียดถี่ถ้วน ตอบกลับเป็นภาษาไทยโดยใช้โครงสร้างดังนี้เท่านั้น:
+[ASSESSMENT]
+(ประเมินอาการที่เป็นไปได้ 2-3 ข้อ โดยอิงจากข้อมูลที่ผู้ใช้ให้มาอย่างสมเหตุสมผล)
+[RECOMMENDATION]
+(ให้คำแนะนำในการดูแลตัวเองเบื้องต้นที่ทำได้จริงและปลอดภัย)
+[WARNING]
+(ระบุสัญญาณอันตรายที่ควรรีบไปพบแพทย์ทันที หากมี)
+
+อาการของผู้ใช้: "${currentSymptoms}"`;
             const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: [{ role: "user", parts: [{ text: instruction }] }], safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }] });
 
             const resultText = response.text || '';
             const parsedResult = parseAnalysis(resultText);
             setAnalysisResult(parsedResult);
             
-            const newHistoryItem: HistoryItem = { id: Date.now(), date: new Date().toLocaleString('th-TH'), symptoms, analysis: parsedResult };
+            const newHistoryItem: HistoryItem = { id: Date.now(), date: new Date().toLocaleString('th-TH'), symptoms: currentSymptoms, analysis: parsedResult };
             setHistory(prev => {
                 const newHistory = [newHistoryItem, ...prev].slice(0, 20); // Keep last 20
                 localStorage.setItem('dr_rak_conversation_history', JSON.stringify(newHistory));
@@ -182,12 +199,19 @@ export const DrRakAvatar: React.FC = () => {
             speak(toSpeak);
 
         } catch (err: any) {
-            setError("ขออภัยค่ะ เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล");
+            const errorMsg = "ขออภัยค่ะ เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล";
+            setError(errorMsg);
+            speak(errorMsg);
         } finally {
             setIsAnalyzing(false);
             if (interactionStateRef.current !== 'speaking') setInteractionState('idle');
         }
-    }, [symptoms, isMuted, selectedVoice]);
+    }, [isMuted, selectedVoice]);
+
+    const handleError = (errorMessage: string, speakMessage?: string) => {
+        setError(errorMessage);
+        speak(speakMessage || errorMessage);
+    };
 
     const startListening = (mode: 'wakeWord' | 'primary' | 'confirmation') => {
         if (!SpeechRecognition) {
@@ -223,17 +247,25 @@ export const DrRakAvatar: React.FC = () => {
         };
 
         recognition.onerror = (event: any) => {
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
             if (event.error !== 'no-speech' && event.error !== 'aborted') {
-                setError(`เกิดข้อผิดพลาดในการรับเสียง: ${event.error}`);
-                setInteractionState('idle');
+                handleError(
+                    `เกิดข้อผิดพลาดในการรับเสียง: ${event.error}`, 
+                    "ขออภัยค่ะ มีปัญหาในการรับสัญญาณเสียง กรุณาลองอีกครั้งนะคะ"
+                );
             }
         };
 
         recognition.onend = () => {
             if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
             const currentState = interactionStateRef.current;
+            
             if (currentState === 'listeningPrimary') {
-                speak("มีอาการอื่นเพิ่มเติมอีกไหมคะ", () => startListening('confirmation'));
+                if (symptomsRef.current.trim().length > 0) {
+                    speak("มีอาการอื่นเพิ่มเติมอีกไหมคะ", () => startListening('confirmation'));
+                } else {
+                    setInteractionState('idle');
+                }
             } else if (currentState === 'listeningConfirmation') {
                 speak("รับทราบข้อมูลค่ะ กำลังวิเคราะห์อาการสักครู่นะคะ", () => handleAnalyze());
             } else if (currentState === 'waitingForWakeWord' && !wakeWordDetectedRef.current) {
