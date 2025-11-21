@@ -12,13 +12,14 @@ import { QRCodeModal } from './components/QRCodeModal';
 
 // Base friend count (ฐานจำนวนเพื่อนเริ่มต้น)
 const BASE_FRIEND_COUNT = 450;
-// Namespace & Key (Fresh production key)
-const COUNTER_NAMESPACE = 'dr-rak-global-counter-2024'; 
+
+// Namespace: Change this to reset the counter logic cleanly
+const COUNTER_NAMESPACE = 'dr-rak-production-live-v1'; 
 const COUNTER_KEY = 'users';
 
 // LocalStorage Keys
-const STORAGE_KEY_VISITED = `visited_${COUNTER_NAMESPACE}`;
-const STORAGE_KEY_LAST_COUNT = `last_count_${COUNTER_NAMESPACE}`;
+const STORAGE_KEY_VISITED = `dr_rak_is_visited_${COUNTER_NAMESPACE}`;
+const STORAGE_KEY_CACHED_COUNT = `dr_rak_cached_count_${COUNTER_NAMESPACE}`;
 
 const App: React.FC = () => {
   const [openAccordion, setOpenAccordion] = React.useState<string | null>('pulse-check');
@@ -27,12 +28,11 @@ const App: React.FC = () => {
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   
-  // 1. OPTIMISTIC INITIALIZATION
-  // Initialize with Base + 1 immediately if no saved data exists.
-  // This ensures the user sees themselves counted (451) instantly, resolving the "not adding anyone" issue.
+  // Initialize with cached value or Base+1 (Optimistic)
+  // We use a function to read localStorage only once on initialization
   const [totalFriends, setTotalFriends] = useState(() => {
-    const savedCount = localStorage.getItem(STORAGE_KEY_LAST_COUNT);
-    return savedCount ? parseInt(savedCount, 10) : BASE_FRIEND_COUNT + 1;
+    const saved = localStorage.getItem(STORAGE_KEY_CACHED_COUNT);
+    return saved ? parseInt(saved, 10) : BASE_FRIEND_COUNT + 1;
   });
   
   const isMounted = useRef(false);
@@ -41,60 +41,68 @@ const App: React.FC = () => {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
-    const syncFriendCount = async () => {
+    const syncGlobalCount = async () => {
+      // Prevent double execution in React Strict Mode
       if (isMounted.current) return;
       isMounted.current = true;
 
+      // Check if this device has visited before
       const hasVisited = localStorage.getItem(STORAGE_KEY_VISITED);
       
-      // Cache Buster to prevent browser from serving stale data
-      const timestamp = new Date().getTime();
+      // Generate a random timestamp to force browser to ignore cache
+      const noCache = new Date().getTime();
       
       let url = '';
       
       if (!hasVisited) {
-        // Case A: New Device -> Hit /up (Increment)
-        url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up?t=${timestamp}`;
+        // --- NEW DEVICE LOGIC ---
+        // 1. Hit '/up' to tell Server: "Add +1 to the global count"
+        // 2. This SAVES the new total to the server database automatically.
+        url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up?t=${noCache}`;
       } else {
-        // Case B: Returning Device -> Hit / (Read Only)
-        url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}?t=${timestamp}`;
+        // --- RETURNING DEVICE LOGIC ---
+        // 1. Hit '/' to tell Server: "Give me the latest total"
+        // 2. This reads the value that the New Device just saved.
+        url = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}?t=${noCache}`;
       }
 
       try {
-        const response = await fetch(url, { 
+        const response = await fetch(url, {
             method: 'GET',
-            cache: 'no-store', // Critical: Disable cache
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            // Critical: Force network request, never use disk cache
+            cache: 'no-store' 
         });
 
         if (response.ok) {
           const data = await response.json();
           if (typeof data.count === 'number') {
-            // Calculate true total
-            const newTotal = BASE_FRIEND_COUNT + data.count;
+            // Calculate Real Total: Base (450) + Server Count
+            const realTotal = BASE_FRIEND_COUNT + data.count;
             
-            // Update State (only if valid)
-            setTotalFriends(newTotal);
+            // Update UI
+            setTotalFriends(realTotal);
             
-            // Save to Storage (Persistence)
-            localStorage.setItem(STORAGE_KEY_LAST_COUNT, newTotal.toString());
+            // Cache locally for offline support only
+            localStorage.setItem(STORAGE_KEY_CACHED_COUNT, realTotal.toString());
             
-            // Mark this device as registered
+            // Mark as visited so next time we only Read, not Add
             if (!hasVisited) {
-              localStorage.setItem(STORAGE_KEY_VISITED, 'true');
+                localStorage.setItem(STORAGE_KEY_VISITED, 'true');
+                console.log("New device registered. Count incremented on server.");
+            } else {
+                console.log("Returning device. Synced latest count from server.");
             }
           }
+        } else {
+            console.warn("API response not OK", response.status);
         }
       } catch (error) {
-        console.error("Counter API connection failed:", error);
-        // On error, we purposefully do NOT revert the state.
-        // The user keeps seeing their optimistic count (Base + 1) or the last saved count.
+        console.error("Failed to sync count:", error);
+        // If network fails, we silently stay on the optimistic/cached value
       }
     };
 
-    syncFriendCount();
+    syncGlobalCount();
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
