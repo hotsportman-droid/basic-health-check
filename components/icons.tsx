@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 const IconWrapper: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className }) => (
@@ -196,4 +195,10 @@ export const StopIcon: React.FC<{ className?: string }> = ({ className }) => (
   <IconWrapper className={className}>
     <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
   </IconWrapper>
+);
+
+export const HistoryIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+      <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </IconWrapper>
 );
