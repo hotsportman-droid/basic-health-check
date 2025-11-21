@@ -12,8 +12,8 @@ import { QRCodeModal } from './components/QRCodeModal';
 
 // --- COUNTER CONFIGURATION ---
 const BASE_FRIEND_COUNT = 450;
-// Using a new namespace to ensure a clean slate for the definitive fix.
-const COUNTER_NAMESPACE = 'dr-rak-prod-final-v4';
+// Using a new namespace for debugging to ensure a clean slate.
+const COUNTER_NAMESPACE = 'dr-rak-prod-debug-v5';
 const COUNTER_KEY = 'total_friends';
 const STORAGE_KEY_VISITED = `dr_rak_visited_${COUNTER_NAMESPACE}`;
 
@@ -33,42 +33,42 @@ const App: React.FC = () => {
 
     const syncCounter = async () => {
       const hasVisited = localStorage.getItem(STORAGE_KEY_VISITED);
-      const cacheBuster = `?_=${Date.now()}`; // Keep as a fallback
+      const action = hasVisited ? 'read' : 'increment';
       
       let endpoint = '';
-      let isIncrementing = false;
-      
-      if (!hasVisited) {
-        endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up${cacheBuster}`;
-        isIncrementing = true;
+      if (action === 'increment') {
+        endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up`;
       } else {
-        endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}${cacheBuster}`;
+        endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}`;
       }
 
+      console.log(`[Counter] Action: ${action}. Endpoint: ${endpoint}`);
+
       try {
-        // CRITICAL FIX: Add `cache: 'no-store'` option.
-        // This is a direct instruction to the browser to bypass its cache and always
-        // fetch a fresh resource from the network. It's more reliable than URL query parameters alone.
         const response = await fetch(endpoint, { cache: 'no-store' });
+        console.log(`[Counter] Response Status: ${response.status}`);
 
         if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`);
         }
         const data = await response.json();
+        console.log('[Counter] Received data from server:', data);
 
         if (typeof data.count === 'number') {
           const latestTotal = BASE_FRIEND_COUNT + data.count;
+          console.log(`[Counter] Updating display to: ${latestTotal}`);
           setTotalFriends(latestTotal);
           
-          if (isIncrementing) {
+          if (action === 'increment') {
             localStorage.setItem(STORAGE_KEY_VISITED, 'true');
+            console.log('[Counter] Marked this device as "visited".');
           }
         } else {
           throw new Error("Invalid data format from API");
         }
       } catch (error) {
-        console.error("Counter sync failed. The UI will remain in a loading state.", error);
-        // The UI will continue to show the "..." loading indicator.
+        console.error("[Counter] Sync failed. UI will remain in loading state.", error);
+        // The UI will continue to show the "..." loading indicator if the fetch fails.
       }
     };
 
