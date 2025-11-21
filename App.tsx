@@ -12,8 +12,8 @@ import { QRCodeModal } from './components/QRCodeModal';
 
 // --- COUNTER CONFIGURATION ---
 const BASE_FRIEND_COUNT = 450;
-// Using a final, clean namespace for the production counter
-const COUNTER_NAMESPACE = 'dr-rak-prod-final-v3';
+// Using a new namespace to ensure a clean slate for the definitive fix.
+const COUNTER_NAMESPACE = 'dr-rak-prod-final-v4';
 const COUNTER_KEY = 'total_friends';
 const STORAGE_KEY_VISITED = `dr_rak_visited_${COUNTER_NAMESPACE}`;
 
@@ -24,7 +24,7 @@ const App: React.FC = () => {
   const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   
-  // Initialize state to null to represent a "loading" state. No fallback to local storage.
+  // Initialize state to null to represent a "loading" state.
   const [totalFriends, setTotalFriends] = useState<number | null>(null);
   
   useEffect(() => {
@@ -33,38 +33,33 @@ const App: React.FC = () => {
 
     const syncCounter = async () => {
       const hasVisited = localStorage.getItem(STORAGE_KEY_VISITED);
-      const cacheBuster = `?_=${Date.now()}`; // Force fresh request
+      const cacheBuster = `?_=${Date.now()}`; // Keep as a fallback
       
       let endpoint = '';
       let isIncrementing = false;
       
-      // 1. Check if this is a new visitor
       if (!hasVisited) {
-        // New visitor: Prepare to send an increment command
         endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}/up${cacheBuster}`;
         isIncrementing = true;
       } else {
-        // Returning visitor: Prepare to send a "read latest value" command
         endpoint = `https://api.counterapi.dev/v1/${COUNTER_NAMESPACE}/${COUNTER_KEY}${cacheBuster}`;
       }
 
       try {
-        // 2. Always fetch from the server
-        const response = await fetch(endpoint);
+        // CRITICAL FIX: Add `cache: 'no-store'` option.
+        // This is a direct instruction to the browser to bypass its cache and always
+        // fetch a fresh resource from the network. It's more reliable than URL query parameters alone.
+        const response = await fetch(endpoint, { cache: 'no-store' });
+
         if (!response.ok) {
-          // If the server responds with an error, stop and log it. The UI will remain in the loading state.
           throw new Error(`API responded with status: ${response.status}`);
         }
         const data = await response.json();
 
-        // 3. Only proceed after a successful server response
         if (typeof data.count === 'number') {
           const latestTotal = BASE_FRIEND_COUNT + data.count;
-          
-          // 3.1. Display the latest value from the server
           setTotalFriends(latestTotal);
           
-          // 3.2. (Crucial) If the increment was successful, only then mark this device as "visited"
           if (isIncrementing) {
             localStorage.setItem(STORAGE_KEY_VISITED, 'true');
           }
@@ -73,7 +68,6 @@ const App: React.FC = () => {
         }
       } catch (error) {
         console.error("Counter sync failed. The UI will remain in a loading state.", error);
-        // NO FALLBACK. Per user instruction, do not use cached data if the API fails.
         // The UI will continue to show the "..." loading indicator.
       }
     };
