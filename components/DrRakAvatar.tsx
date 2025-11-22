@@ -30,6 +30,83 @@ const safetySettings = [
   { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
 ];
 
+// Helper to clean Markdown for visual display
+const cleanDisplay = (text: string) => {
+    return text.replace(/\*\*/g, '').replace(/[\#]/g, '').replace(/หนูก็/g, 'คนไข้ควร').replace(/หนู/g, 'คนไข้').trim();
+};
+
+// Sub-component for individual history items
+const HistoryItemCard: React.FC<{ item: HistoryItem }> = ({ item }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+        <div className={`bg-white rounded-xl border transition-all duration-300 ${isExpanded ? 'border-indigo-200 shadow-md ring-1 ring-indigo-50' : 'border-slate-200 shadow-sm hover:border-indigo-200 hover:shadow-md'}`}>
+            <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-full p-4 text-left flex flex-col gap-3 focus:outline-none"
+            >
+                <div className="flex justify-between items-center w-full">
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 tracking-wide uppercase">
+                        {item.date}
+                    </span>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${isExpanded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-50 text-slate-400'}`}>
+                        <ChevronDownIcon className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                    </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                    <div className="mt-0.5 p-1.5 bg-slate-100 rounded-full text-slate-500 shrink-0">
+                        <UserIcon className="w-4 h-4" />
+                    </div>
+                    <p className={`text-sm text-slate-700 font-medium leading-relaxed ${isExpanded ? '' : 'line-clamp-1 text-slate-600'}`}>
+                        {item.symptoms}
+                    </p>
+                </div>
+            </button>
+
+            <div 
+                className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}
+            >
+                <div className="p-5 pt-0 space-y-4">
+                    <div className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mb-2"></div>
+                    
+                    {/* Assessment */}
+                    <div>
+                         <h6 className="text-xs font-bold text-slate-900 flex items-center gap-2 mb-2 uppercase tracking-wider opacity-80">
+                            <CheckCircleIcon className="w-4 h-4 text-teal-500"/> ผลการประเมิน
+                        </h6>
+                        <p className="text-sm text-slate-600 leading-relaxed pl-6">
+                            {cleanDisplay(item.analysis.assessment)}
+                        </p>
+                    </div>
+
+                    {/* Recommendation */}
+                    <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100/50">
+                        <h6 className="text-xs font-bold text-indigo-700 flex items-center gap-2 mb-2 uppercase tracking-wider">
+                            <StethoscopeIcon className="w-4 h-4"/> คำแนะนำ
+                        </h6>
+                        <p className="text-sm text-indigo-900/80 leading-relaxed whitespace-pre-line pl-1">
+                            {cleanDisplay(item.analysis.recommendation)}
+                        </p>
+                    </div>
+
+                    {/* Warning */}
+                    {(item.analysis.warning && item.analysis.warning !== '-') && (
+                         <div className="bg-red-50/60 p-4 rounded-xl border border-red-100/50">
+                             <h6 className="text-xs font-bold text-red-600 flex items-center gap-2 mb-2 uppercase tracking-wider">
+                                <ExclamationIcon className="w-4 h-4"/> ข้อควรระวัง
+                            </h6>
+                            <p className="text-sm text-red-800/80 leading-relaxed pl-1">
+                                {cleanDisplay(item.analysis.warning)}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const DrRakAvatar: React.FC = () => {
   const [interactionState, setInteractionState] = useState<InteractionState>('idle');
   const [symptoms, setSymptoms] = useState('');
@@ -291,41 +368,43 @@ export const DrRakAvatar: React.FC = () => {
     }
   };
 
-  // Helper to clean Markdown for visual display
-  const cleanDisplay = (text: string) => {
-      return text.replace(/\*\*/g, '').replace(/[\#]/g, '').replace(/หนูก็/g, 'คนไข้ควร').replace(/หนู/g, 'คนไข้').trim();
-  };
-
   // Helper to build natural speech that sounds like a human reading
   const constructResponseText = (result: Analysis) => {
       // 1. Clean up Markdown characters that shouldn't be spoken
-      const clean = (t: string) => t.replace(/[\*_#]/g, '').replace(/หนูก็/g, 'คนไข้ควร').replace(/หนู/g, 'คนไข้').trim();
+      const clean = (t: string) => t
+        .replace(/\*\*/g, '') // Bold formatting
+        .replace(/[\*#]/g, '') // Other markdown
+        .replace(/หนูก็/g, 'คนไข้ควร')
+        .replace(/หนู/g, 'คนไข้')
+        .trim();
       
       // 2. Process recommendation list to sound natural
-      // Split by newlines, remove bullets/numbers, and rejoin with natural pauses
-      const recLines = clean(result.recommendation)
+      // Split by newlines, remove bullets/numbers, and rejoin with structured numbering
+      const recLines = result.recommendation
         .split('\n')
-        .map(l => l.replace(/^[-*•\d\.]+\s*/, '').trim()) // Remove "- " or "1. "
+        .map(l => clean(l).replace(/^[-*•\d\.]+\s*/, '').trim()) // Strict removal of bullets/numbers
         .filter(l => l.length > 0);
         
       let spokenRec = '';
       if (recLines.length > 1) {
-          // Use more conversational connectors
-          spokenRec = recLines.join('... แล้วก็... '); 
+          // Use Numbered list structure "Item 1... Item 2..."
+          spokenRec = recLines.map((line, i) => `ข้อที่ ${i + 1}... ${line}`).join('... ');
       } else {
           spokenRec = recLines[0] || '';
       }
 
+      const spokenAssessment = clean(result.assessment);
+      const spokenWarning = clean(result.warning);
+
       // 3. Construct the full sentence with warm tone
-      // Emphasize flow over structure
       return `
-        ${clean(result.assessment)}
+        ${spokenAssessment}
         
-        ช่วงนี้หมออยากให้ลองดูแลตัวเองแบบนี้นะคะ... ${spokenRec}
+        หมอแนะนำให้ลองทำแบบนี้นะคะ... ${spokenRec}
         
-        ที่สำคัญหมออยากฝากเรื่อง... ${clean(result.warning)}
+        และที่สำคัญ... ${spokenWarning}
         
-        ดูแลสุขภาพด้วยนะคะ หายไวๆ ค่ะคนไข้
+        ขอให้หายไวๆ นะคะคนไข้ เป็นกำลังใจให้ค่ะ
       `.trim();
   };
 
@@ -527,14 +606,14 @@ ${cleanDisplay(analysisResult.warning)}
                 </div>
             )}
 
-            {/* ANALYZING ANIMATION (Spinning Ring) */}
-            {interactionState === 'analyzing' && (
-                 <div className="absolute inset-[-10px] rounded-full border-4 border-indigo-100 border-t-indigo-500 animate-spin"></div>
-            )}
-            
-            {/* Avatar with Speaking Animation */}
+            {/* ANALYZING ANIMATION (Spinning Ring) - Handled inside DrRakSvgAvatar but kept here as overlay fallback/enhancement if needed. Removing duplication. */}
+            {/* Avatar with Speaking Animation State Passed Down */}
             <div className={`relative z-10 transition-transform duration-300 ${isUserSpeaking ? 'scale-110' : 'scale-100'} ${interactionState === 'speaking' ? 'animate-subtle-bounce' : ''}`}>
-                 <DrRakSvgAvatar className="w-32 h-32 shadow-lg" />
+                 <DrRakSvgAvatar 
+                    className="w-32 h-32 shadow-lg" 
+                    isSpeaking={interactionState === 'speaking'}
+                    isAnalyzing={interactionState === 'analyzing'}
+                 />
             </div>
             
             {/* Floating Status Badges */}
@@ -677,47 +756,42 @@ ${cleanDisplay(analysisResult.warning)}
       <div className="bg-white border-t border-slate-200">
          <button
             onClick={() => setIsHistoryOpen(o => !o)}
-            className="w-full p-4 text-left flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 hover:bg-slate-50 transition-colors"
+            className="w-full p-4 text-left flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 hover:bg-slate-50 transition-colors group"
             aria-expanded={isHistoryOpen}
           >
             <div className="flex items-center">
-              <HistoryIcon className="w-5 h-5 text-slate-500 mr-3"/>
-              <h4 className="font-bold text-slate-700 text-sm">ประวัติการปรึกษา ({history.length})</h4>
+              <HistoryIcon className="w-5 h-5 text-slate-500 mr-3 group-hover:text-indigo-600 transition-colors"/>
+              <h4 className="font-bold text-slate-700 text-sm group-hover:text-indigo-700 transition-colors">ประวัติการปรึกษา ({history.length})</h4>
             </div>
-            <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${isHistoryOpen ? 'rotate-180' : ''}`} />
+            <div className={`w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center transition-all duration-300 ${isHistoryOpen ? 'bg-indigo-100 rotate-180' : 'group-hover:bg-indigo-50'}`}>
+                <ChevronDownIcon className={`w-5 h-5 transition-colors ${isHistoryOpen ? 'text-indigo-600' : 'text-slate-400'}`} />
+            </div>
         </button>
-        <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isHistoryOpen ? 'max-h-[500px] overflow-y-auto' : 'max-h-0'}`}>
-            <div className="p-4 pt-0">
+        
+        <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isHistoryOpen ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}>
+            <div className="p-6 pt-0 bg-slate-50/30 border-t border-slate-100">
                 {history.length > 0 ? (
-                    <div className="space-y-4">
+                    <div className="space-y-4 py-4">
                         {history.map(item => (
-                            <div key={item.id} className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm hover:border-indigo-200 transition-colors">
-                                <div className="flex justify-between items-start mb-3 pb-2 border-b border-slate-200">
-                                    <span className="font-semibold text-slate-700 text-xs bg-white px-2 py-1 rounded border border-slate-200">{item.date}</span>
-                                </div>
-                                <div className="space-y-3">
-                                    <div>
-                                        <h5 className="font-bold text-slate-800 flex items-center gap-2 mb-1 text-xs">
-                                            <UserIcon className="w-4 h-4 text-gray-500"/> อาการคนไข้
-                                        </h5>
-                                        <p className="text-slate-600 pl-6 text-xs italic">"{item.symptoms}"</p>
-                                    </div>
-                                    <div>
-                                        <h5 className="font-bold text-slate-800 flex items-center gap-2 mb-1 text-xs">
-                                            <CheckCircleIcon className="w-4 h-4 text-green-500"/> ผลประเมิน
-                                        </h5>
-                                        <p className="text-slate-600 pl-6 text-xs line-clamp-2">{cleanDisplay(item.analysis.assessment)}</p>
-                                    </div>
-                                </div>
-                            </div>
+                            <HistoryItemCard key={item.id} item={item} />
                         ))}
-                        <div className="text-center pt-2 pb-2">
-                           <button onClick={clearHistory} className="text-xs text-red-500 hover:text-red-700 font-medium underline decoration-red-200 hover:decoration-red-500">ล้างประวัติทั้งหมด</button>
+                        <div className="text-center pt-4">
+                           <button 
+                                onClick={clearHistory} 
+                                className="inline-flex items-center text-xs text-red-500 hover:text-red-700 font-bold px-4 py-2 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                            >
+                                <TrashIcon className="w-3.5 h-3.5 mr-2" />
+                                ล้างประวัติทั้งหมด
+                           </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="text-center py-6 text-slate-400">
-                        <p className="text-sm">ยังไม่มีประวัติการปรึกษา</p>
+                    <div className="text-center py-10 text-slate-400 flex flex-col items-center">
+                        <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                            <HistoryIcon className="w-6 h-6 text-slate-300" />
+                        </div>
+                        <p className="text-sm font-medium">ยังไม่มีประวัติการปรึกษา</p>
+                        <p className="text-xs mt-1 opacity-70">ประวัติจะแสดงที่นี่หลังจากคุณคุยกับหมอรักษ์</p>
                     </div>
                 )}
             </div>

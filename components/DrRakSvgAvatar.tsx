@@ -5,12 +5,16 @@ interface Props {
   className?: string;
   size?: number;
   showHologram?: boolean;
+  isSpeaking?: boolean;
+  isAnalyzing?: boolean;
 }
 
 export const DrRakSvgAvatar: React.FC<Props> = ({
   className = "",
   size = 200,
   showHologram = true,
+  isSpeaking = false,
+  isAnalyzing = false,
 }) => {
   // Determine styles. If className has width/height classes (like w-32), use them. 
   // Otherwise fallback to inline size.
@@ -28,7 +32,9 @@ export const DrRakSvgAvatar: React.FC<Props> = ({
           showHologram ? "opacity-100" : "opacity-0"
         }`}
       >
-        <div className="absolute inset-[-6px] rounded-full bg-gradient-to-tr from-indigo-300 via-purple-200 to-teal-200 opacity-50 blur-lg animate-pulse" />
+        <div 
+            className={`absolute inset-[-6px] rounded-full bg-gradient-to-tr from-indigo-300 via-purple-200 to-teal-200 opacity-50 blur-lg ${isAnalyzing ? 'animate-spin-slow' : 'animate-pulse'}`} 
+        />
         <div className="absolute inset-0 rounded-full border-2 border-white/60" />
       </div>
 
@@ -81,7 +87,6 @@ export const DrRakSvgAvatar: React.FC<Props> = ({
             <circle cx="320" cy="300" r="20" fill="#FFFFFF" opacity="0.3" />
 
             {/* --- BACK HAIR (Layered BEHIND Body and Neck) --- */}
-            {/* Adjusted Y coordinates (+10) to match previous transform position */}
             <path d="M120,190 C110,290 120,340 150,360 L250,360 C280,340 290,290 280,190" fill="#2D211C" />
 
             {/* --- BODY --- */}
@@ -119,10 +124,13 @@ export const DrRakSvgAvatar: React.FC<Props> = ({
                 <g fill="#3E2723">
                     {/* Left Eye */}
                     <ellipse cx="165" cy="165" rx="9" ry="11" />
-                    <circle cx="168" cy="162" r="3" fill="white" /> {/* Highlight */}
+                    {/* Highlight - Pulsing when speaking */}
+                    <circle cx="168" cy="162" r="3" fill="white" className={isSpeaking ? 'animate-pulse' : ''} /> 
+                    
                     {/* Right Eye */}
                     <ellipse cx="235" cy="165" rx="9" ry="11" />
-                    <circle cx="238" cy="162" r="3" fill="white" /> {/* Highlight */}
+                    {/* Highlight - Pulsing when speaking */}
+                    <circle cx="238" cy="162" r="3" fill="white" className={isSpeaking ? 'animate-pulse' : ''} /> 
                 </g>
                 
                 {/* Eyelashes */}
@@ -136,8 +144,15 @@ export const DrRakSvgAvatar: React.FC<Props> = ({
                 {/* Nose */}
                 <path d="M198,180 Q200,185 202,180" stroke="#CEA07E" strokeWidth="2" fill="none" />
 
-                {/* Mouth (Gentle Smile) */}
-                <path d="M185,205 Q200,215 215,205" stroke="#D84315" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                {/* Mouth (Gentle Smile) - Animates when speaking */}
+                <path 
+                    d="M185,205 Q200,215 215,205" 
+                    stroke="#D84315" 
+                    strokeWidth="2.5" 
+                    fill="none" 
+                    strokeLinecap="round"
+                    className={`transition-all duration-200 ${isSpeaking ? 'animate-talking-mouth' : ''}`}
+                />
 
                 {/* --- HAIR (Front) --- */}
                 {/* Main Hair Shape (Longer sides) */}
@@ -173,10 +188,31 @@ export const DrRakSvgAvatar: React.FC<Props> = ({
         <div className="absolute top-4 right-8 w-8 h-4 bg-white/30 rounded-full blur-sm transform -rotate-45 pointer-events-none"></div>
       </div>
 
-      {/* 4. Status Dot (Kept relative for size consistency) */}
-      <div className="absolute bottom-[5%] right-[5%] w-[15%] h-[15%] bg-green-400 rounded-full border-2 border-white shadow-sm z-20 animate-bounce-subtle">
-         <div className="absolute inset-0 bg-green-400 rounded-full animate-ping opacity-20"></div>
+      {/* 4. Status Dot - Responsive Color */}
+      <div 
+        className={`absolute bottom-[5%] right-[5%] w-[15%] h-[15%] rounded-full border-2 border-white shadow-sm z-20 transition-colors duration-300 ${
+            isAnalyzing ? 'bg-indigo-500' : (isSpeaking ? 'bg-amber-400' : 'bg-green-400')
+        } animate-bounce-subtle`}
+      >
+         <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${isAnalyzing ? 'bg-indigo-500' : (isSpeaking ? 'bg-amber-400' : 'bg-green-400')}`}></div>
       </div>
+      
+      <style>{`
+        .animate-spin-slow {
+            animation: spin-slow 4s linear infinite;
+        }
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-talking-mouth {
+            animation: talking 0.3s ease-in-out infinite alternate;
+        }
+        @keyframes talking {
+            from { stroke-width: 2.5; transform: translateY(0); }
+            to { stroke-width: 3.5; transform: translateY(1.5px); }
+        }
+      `}</style>
     </div>
   );
 };
