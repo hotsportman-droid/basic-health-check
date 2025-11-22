@@ -367,6 +367,16 @@ export const DrRakAvatar: React.FC = () => {
 
   const showHospitalButton = analysisResult?.recommendation.includes('โรงพยาบาล') || analysisResult?.recommendation.includes('คลินิก') || analysisResult?.warning.includes('แพทย์');
 
+  // Get styling for status text
+  const getStatusColor = () => {
+      switch(interactionState) {
+          case 'listening': return 'text-red-500 font-semibold animate-pulse';
+          case 'analyzing': return 'text-indigo-500 font-semibold';
+          case 'speaking': return 'text-amber-500 font-semibold';
+          default: return 'text-slate-500';
+      }
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 overflow-hidden w-full max-w-2xl mx-auto flex flex-col">
       <div className="p-6">
@@ -377,7 +387,7 @@ export const DrRakAvatar: React.FC = () => {
                 </div>
                 <div>
                     <h3 className="text-xl font-bold text-slate-800">ปรึกษาหมอรักษ์</h3>
-                    <p className="text-slate-500 text-sm">{statusText}</p>
+                    <p className={`text-sm ${getStatusColor()} transition-colors`}>{statusText}</p>
                 </div>
             </div>
             <button onClick={() => setIsMuted(m => !m)} className={`text-slate-400 hover:text-indigo-600 transition-colors ${isMuted ? 'text-red-400' : ''}`}>
@@ -385,54 +395,78 @@ export const DrRakAvatar: React.FC = () => {
             </button>
         </div>
 
-        <div className="relative flex flex-col md:flex-row items-center gap-6">
-          <div className="relative shrink-0">
-            <DrRakSvgAvatar className="w-32 h-32 shadow-lg" />
-            <div className={`absolute inset-0 rounded-full border-4 border-indigo-500 transition-all duration-500 pointer-events-none ${interactionState === 'listening' ? 'animate-pulse opacity-100' : 'opacity-0 scale-125'}`}></div>
+        <div className="relative flex flex-col md:flex-row items-center gap-8">
+          
+          {/* Avatar Section with Interactive Animations */}
+          <div className="relative shrink-0 flex justify-center items-center">
+            {/* Interaction Effects */}
+            {interactionState === 'listening' && (
+                <>
+                    <div className="absolute inset-0 rounded-full bg-red-500/10 animate-ping"></div>
+                    <div className="absolute -inset-2 rounded-full border-2 border-red-100 animate-pulse"></div>
+                </>
+            )}
+            {interactionState === 'analyzing' && (
+                 <div className="absolute -inset-2 rounded-full border-4 border-indigo-100 border-t-indigo-500 animate-spin"></div>
+            )}
+            
+            <DrRakSvgAvatar className="w-32 h-32 md:w-40 md:h-40 shadow-lg relative z-10" />
+            
+            {/* Floating Status Badges */}
             {interactionState === 'speaking' && (
-                 <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1 shadow-md animate-bounce">
-                    <SpeakerWaveIcon className="w-6 h-6 text-indigo-500" />
+                 <div className="absolute -bottom-2 -right-2 bg-white p-2 rounded-full shadow-lg border border-indigo-50 z-20 animate-bounce">
+                    <SpeakerWaveIcon className="w-5 h-5 text-indigo-600" />
+                 </div>
+            )}
+            {interactionState === 'listening' && (
+                 <div className="absolute -bottom-2 -right-2 bg-red-500 p-2 rounded-full shadow-lg border-2 border-white z-20 animate-pulse">
+                    <MicIcon className="w-5 h-5 text-white" />
                  </div>
             )}
           </div>
 
-          <div className="w-full">
+          {/* Input & Control Section */}
+          <div className="w-full flex flex-col h-full justify-between">
             <textarea
               value={symptoms}
               onChange={(e) => setSymptoms(e.target.value)}
               placeholder="กดปุ่มไมค์ แล้วเล่าอาการให้หมอฟังได้เลยค่ะ..."
-              className="w-full h-28 p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none"
+              className="w-full h-28 p-4 text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none shadow-inner"
               readOnly={interactionState !== 'idle' && interactionState !== 'listening'}
             />
             
-            <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center justify-between mt-4">
                  <p className="text-xs text-slate-400 hidden md:block">
-                    *หากไม่สะดวกถือโทรศัพท์ สามารถวางไว้ใกล้ตัวแล้วพูดได้เลยค่ะ
+                    *หมอรับฟังทุกอาการอย่างตั้งใจนะคะ
                  </p>
+                 
+                 {/* Main Action Button - Enhanced Visibility */}
                  <div className="flex-1 md:flex-none flex justify-end">
                     <button
                         onClick={handleMainButtonClick}
                         disabled={isLoading || interactionState === 'analyzing'}
-                        className={`w-full md:w-auto px-6 py-2.5 rounded-full font-bold text-white transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            interactionState === 'idle' 
-                            ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' 
-                            : interactionState === 'listening'
-                                ? 'bg-red-500 hover:bg-red-600 shadow-red-200 animate-pulse'
-                                : interactionState === 'speaking'
-                                    ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200'
-                                    : 'bg-gray-400'
-                        }`}
+                        className={`
+                            relative overflow-hidden group w-full md:w-auto px-8 py-3 rounded-full font-bold text-white transition-all 
+                            flex items-center justify-center gap-3 shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
+                            ${interactionState === 'idle' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 hover:shadow-indigo-300' : ''}
+                            ${interactionState === 'listening' ? 'bg-red-500 hover:bg-red-600 shadow-red-200 animate-pulse' : ''}
+                            ${interactionState === 'speaking' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : ''}
+                            ${interactionState === 'analyzing' ? 'bg-slate-400 cursor-wait' : ''}
+                        `}
                     >
-                        {interactionState === 'idle' && <><MicIcon className="w-5 h-5"/> พูดอาการ</>}
+                        {interactionState === 'idle' && (
+                            <>
+                                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                                <MicIcon className="w-5 h-5 relative z-10"/> 
+                                <span className="relative z-10">พูดอาการ</span>
+                            </>
+                        )}
                         {interactionState === 'listening' && <><StopIcon className="w-5 h-5"/> หยุด / ส่ง</>}
-                        {interactionState === 'analyzing' && <span>กำลังคิด...</span>}
+                        {interactionState === 'analyzing' && <span>กำลังวิเคราะห์...</span>}
                         {interactionState === 'speaking' && <><VolumeOffIcon className="w-5 h-5"/> หยุดพูด</>}
                     </button>
                  </div>
             </div>
-            <p className="text-xs text-slate-400 mt-2 text-center md:hidden">
-                *วางโทรศัพท์ไว้ใกล้ตัวแล้วกดปุ่มพูดได้เลยค่ะ
-            </p>
           </div>
         </div>
       </div>
@@ -440,13 +474,13 @@ export const DrRakAvatar: React.FC = () => {
       {(isLoading || analysisResult) && (
         <div className="bg-slate-50/70 p-6 border-t border-slate-200 animate-fade-in">
           {isLoading && (
-              <div className="flex flex-col items-center justify-center py-4 space-y-3">
-                  <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="flex flex-col items-center justify-center py-6 space-y-4">
+                  <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
                   <p className="text-indigo-600 text-sm font-medium animate-pulse">หมอกำลังวิเคราะห์อาการ...</p>
               </div>
           )}
           {analysisResult && !isLoading && (
-            <div className="space-y-5 text-sm">
+            <div className="space-y-5 text-sm animate-fade-in-up">
                  <div className="flex justify-end">
                     <button 
                         onClick={() => speak(constructResponseText(analysisResult))}
@@ -455,23 +489,23 @@ export const DrRakAvatar: React.FC = () => {
                         <SpeakerWaveIcon className="w-4 h-4" /> ฟังเสียงอีกครั้ง
                     </button>
                  </div>
-                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                    <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2 text-base">
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-3 text-base">
                         <CheckCircleIcon className="w-6 h-6 text-teal-500"/> ผลการประเมิน
                     </h4>
-                    <p className="text-slate-600 leading-relaxed">{analysisResult.assessment}</p>
+                    <p className="text-slate-600 leading-relaxed text-base">{analysisResult.assessment}</p>
                 </div>
-                 <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                    <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2 text-base">
+                 <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-3 text-base">
                         <StethoscopeIcon className="w-6 h-6 text-blue-500"/> คำแนะนำจากหมอ
                     </h4>
-                    <p className="text-slate-600 leading-relaxed">{analysisResult.recommendation}</p>
+                    <p className="text-slate-600 leading-relaxed text-base">{analysisResult.recommendation}</p>
                 </div>
-                 <div className="bg-red-50 p-4 rounded-xl border border-red-100 shadow-sm">
-                    <h4 className="font-bold text-red-700 flex items-center gap-2 mb-2 text-base">
+                 <div className="bg-red-50 p-5 rounded-2xl border border-red-100 shadow-sm">
+                    <h4 className="font-bold text-red-700 flex items-center gap-2 mb-3 text-base">
                         <ExclamationIcon className="w-6 h-6 text-red-500"/> ข้อควรระวัง
                     </h4>
-                    <p className="text-red-600 leading-relaxed">{analysisResult.warning}</p>
+                    <p className="text-red-600 leading-relaxed text-base">{analysisResult.warning}</p>
                 </div>
                 {showHospitalButton && (
                     <div className="pt-2 text-center">
@@ -541,6 +575,13 @@ export const DrRakAvatar: React.FC = () => {
             </div>
         </div>
       </div>
+       <style>{`
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up { animation: fade-in-up 0.4s ease-out forwards; }
+      `}</style>
     </div>
   );
 };
