@@ -1,7 +1,7 @@
 
 import React from 'react';
 import type { HealthCheckItem } from './types';
-import { HeartIcon, LungIcon, MouthIcon, SkinIcon, BloodDropIcon, PressureIcon } from './components/icons';
+import { HeartIcon, LungIcon, MouthIcon, SkinIcon, BloodDropIcon, PressureIcon, BrainIcon } from './components/icons';
 
 // FIX: Removed hardcoded API key configuration to adhere to security guidelines. The API key should be securely managed via environment variables.
 
@@ -77,6 +77,18 @@ export const HEALTH_CHECKS: HealthCheckItem[] = [
       'สังเกตเหงือก: มีสีชมพู ไม่บวม หรือมีเลือดออกง่ายหรือไม่',
       'สังเกตลิ้น: มีฝ้าขาวหนา หรือมีแผลหรือไม่',
       'สังเกตกระพุ้งแก้มและเพดานปาก: มีแผลร้อนใน หรือก้อนเนื้อผิดปกติหรือไม่',
+    ],
+  },
+  {
+    icon: React.createElement(BrainIcon),
+    title: 'การตรวจสุขภาพจิต',
+    description: 'การสำรวจสภาวะทางอารมณ์และความเครียด เพื่อเฝ้าระวังความเสี่ยงโรคซึมเศร้าและวิตกกังวล',
+    steps: [
+      'หาสถานที่เงียบสงบ และสำรวจความรู้สึกในช่วง 2 สัปดาห์ที่ผ่านมา',
+      'ถามตัวเองว่า: รู้สึกหดหู่ เศร้า หรือท้อแท้สิ้นหวังหรือไม่?',
+      'ถามตัวเองว่า: รู้สึกเบื่อหน่าย ไม่มีความสุขในการทำสิ่งที่เคยชอบหรือไม่?',
+      'สังเกตอาการทางกาย: นอนไม่หลับ/นอนเยอะไป, เบื่ออาหาร/กินเยอะไป',
+      'หากมีอาการเหล่านี้รบกวนชีวิตประจำวัน ควรปรึกษาจิตแพทย์ หรือโทรสายด่วน 1323',
     ],
   },
 ];

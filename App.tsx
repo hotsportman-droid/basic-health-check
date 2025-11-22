@@ -152,12 +152,12 @@ const App: React.FC = () => {
                  <div className="max-w-2xl text-center md:text-left">
                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm text-xs font-bold text-indigo-100 mb-6">
                         <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                        AI Health Assistant
+                        Health Assistant
                      </div>
                      <h2 className="text-3xl md:text-5xl font-bold mb-6 leading-tight tracking-tight">
                         ปรึกษาปัญหาสุขภาพกับ <br/>
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-indigo-200">
-                            "หมอรักษ์" AI อัจฉริยะ
+                            "หมอรักษ์" อัจฉริยะ
                         </span>
                      </h2>
                      <p className="text-indigo-100 text-lg md:text-xl mb-8 leading-relaxed max-w-xl mx-auto md:mx-0">
@@ -225,7 +225,7 @@ const App: React.FC = () => {
                       <div>
                           <p className="text-indigo-100 text-sm font-medium mb-1">เพื่อนรักสุขภาพ</p>
                           <p className="text-4xl font-bold tracking-tight">{totalFriends}</p>
-                          <p className="text-xs text-indigo-200 mt-2">คนใช้งานแอปฯ วันนี้</p>
+                          <p className="text-xs text-indigo-200 mt-2">คนใช้งานแอปฯ ทั้งหมดตอนนี้</p>
                       </div>
                       <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
                           <UserIcon className="w-8 h-8 text-white" />

@@ -61,6 +61,13 @@ export const MouthIcon: React.FC<{ className?: string }> = ({ className }) => (
   </IconWrapper>
 );
 
+export const BrainIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <IconWrapper className={className}>
+    <path d="M9.5 2c-2.5 0-4.5 2-4.5 4.5 0 1 .5 2 1 2.5-1.5 1-2 3-2 4.5 0 2.5 2 4.5 4.5 4.5.5 0 1-.1 1.5-.2 1 1.5 3 2.2 5 1.2 1.5 1 3.5 1 5-1 1.5 1.5 4 1.5 4.5 0 2.5 0 4.5-2 4.5-4.5 0-1.5-.5-3.5-2-4.5.5-.5 1-1.5 1-2.5 0-2.5-2-4.5-4.5-4.5-1 0-2 .5-2.5 1-.5-1.5-2.5-3-4.5-3-1.5 0-3 .5-3.5 2-.5-.5-1.5-1-2.5-1z"></path>
+    <path d="M12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+  </IconWrapper>
+);
+
 export const MapPinIcon: React.FC<{ className?: string }> = ({ className }) => (
     <IconWrapper className={className}>
       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"></path>

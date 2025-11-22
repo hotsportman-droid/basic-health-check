@@ -820,7 +820,7 @@ ${cleanDisplay(analysisResult.warning)}
             <div className="text-left text-sm text-slate-600 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
                 <div>
                     <p className="font-bold text-slate-800 mb-1 flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></span>1. การประมวลผลข้อมูล</p>
-                    <p className="pl-4 text-slate-500 text-xs">เสียงและข้อความจะถูกส่งไปประมวลผลที่ AI (Google Gemini) เพื่อวิเคราะห์อาการ และจะ <strong className="text-slate-700">ไม่ถูกจัดเก็บถาวร</strong> บนเซิร์ฟเวอร์</p>
+                    <p className="pl-4 text-slate-500 text-xs">เสียงและข้อความจะถูกส่งไปประมวลผลที่ระบบ (Google Gemini) เพื่อวิเคราะห์อาการ และจะ <strong className="text-slate-700">ไม่ถูกจัดเก็บถาวร</strong> บนเซิร์ฟเวอร์</p>
                 </div>
                 <div>
                     <p className="font-bold text-slate-800 mb-1 flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></span>2. การจัดเก็บข้อมูล</p>
