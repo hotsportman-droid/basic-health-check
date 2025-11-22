@@ -277,13 +277,13 @@ export const DrRakAvatar: React.FC = () => {
 
   // Helper to clean Markdown for visual display
   const cleanDisplay = (text: string) => {
-      return text.replace(/\*\*/g, '').replace(/[\#]/g, '').trim();
+      return text.replace(/\*\*/g, '').replace(/[\#]/g, '').replace(/หนูก็/g, 'คนไข้ควร').replace(/หนู/g, 'คนไข้').trim();
   };
 
   // Helper to build natural speech that sounds like a human reading
   const constructResponseText = (result: Analysis) => {
       // 1. Clean up Markdown characters that shouldn't be spoken
-      const clean = (t: string) => t.replace(/[\*_#]/g, '').trim();
+      const clean = (t: string) => t.replace(/[\*_#]/g, '').replace(/หนูก็/g, 'คนไข้ควร').replace(/หนู/g, 'คนไข้').trim();
       
       // 2. Process recommendation list to sound natural
       // Split by newlines, remove bullets/numbers, and rejoin with natural pauses
@@ -334,7 +334,12 @@ export const DrRakAvatar: React.FC = () => {
     const prompt = `
       Role: คุณคือ "หมอรักษ์" แพทย์หญิงผู้เชี่ยวชาญที่มีความเห็นอกเห็นใจ
       Task: วิเคราะห์อาการสุขภาพจากข้อความ
-      Tone: สุภาพ, อ่อนโยน, ใช้ภาษาพูดที่เป็นธรรมชาติ (Spoken Language), **ต้องเรียกผู้ใช้งานว่า "คนไข้" ทุกครั้ง**
+      Tone: สุภาพ, อ่อนโยน, ใช้ภาษาพูดที่เป็นธรรมชาติ (Spoken Language)
+
+      Strict Instructions:
+      - **ห้ามเรียกผู้ใช้งานว่า "หนู" เด็ดขาด** ให้เรียกว่า **"คนไข้"** หรือ **"คุณ"** เท่านั้น
+      - **ห้ามใช้คำว่า "หนูก็"** ให้ใช้คำว่า **"คนไข้ควร"** แทน
+      - แทนตัวเองว่า "หมอ"
       
       Input Symptoms: "${symptomsRef.current}"
 
