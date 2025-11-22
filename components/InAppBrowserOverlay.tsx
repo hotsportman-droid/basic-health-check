@@ -1,10 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
-import { ShareIcon } from './icons';
 
 export const InAppBrowserOverlay: React.FC = () => {
   const [isInApp, setIsInApp] = useState(false);
-  const [os, setOs] = useState<'ios' | 'android' | 'other'>('other');
 
   useEffect(() => {
     const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
@@ -19,13 +17,6 @@ export const InAppBrowserOverlay: React.FC = () => {
     
     if (isLine || isFb || isIg || isTwitter || isLinkedIn) {
         setIsInApp(true);
-    }
-
-    // Detect OS for specific instructions
-    if (/iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream) {
-        setOs('ios');
-    } else if (/android/i.test(userAgent)) {
-        setOs('android');
     }
   }, []);
 
@@ -49,29 +40,16 @@ export const InAppBrowserOverlay: React.FC = () => {
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mr-2"></span>
                 วิธีแก้ไข:
             </h3>
-            {os === 'ios' ? (
-                <ol className="text-sm text-slate-700 space-y-3">
-                    <li className="flex items-start">
-                        <span className="font-bold mr-2">1.</span>
-                        <span>แตะที่ปุ่ม <strong>แชร์</strong> <ShareIcon className="inline w-4 h-4 mx-1 text-blue-500"/> ที่มุมจอ</span>
-                    </li>
-                    <li className="flex items-start">
-                        <span className="font-bold mr-2">2.</span>
-                        <span>เลือก <strong>"เปิดใน Safari"</strong> <br/><span className="text-xs text-slate-500">(Open in Safari)</span></span>
-                    </li>
-                </ol>
-            ) : (
-                 <ol className="text-sm text-slate-700 space-y-3">
-                    <li className="flex items-start">
-                        <span className="font-bold mr-2">1.</span>
-                        <span>แตะที่เมนู <strong>จุดสามจุด (⋮)</strong> ที่มุมขวาบน</span>
-                    </li>
-                    <li className="flex items-start">
-                        <span className="font-bold mr-2">2.</span>
-                        <span>เลือก <strong>"เปิดใน Chrome"</strong> <br/><span className="text-xs text-slate-500">(Open in Chrome)</span></span>
-                    </li>
-                </ol>
-            )}
+            <ol className="text-sm text-slate-700 space-y-3">
+                <li className="flex items-start">
+                    <span className="font-bold mr-2">1.</span>
+                    <span>แตะที่เมนู <strong>จุดสามจุด (⋮)</strong> ที่มุมขวาบน</span>
+                </li>
+                <li className="flex items-start">
+                    <span className="font-bold mr-2">2.</span>
+                    <span>เลือก <strong>"เปิดในเบราว์เซอร์"</strong> <br/><span className="text-xs text-slate-500">(Open in Browser / Safari / Chrome)</span></span>
+                </li>
+            </ol>
         </div>
         
         <div className="mt-6">
