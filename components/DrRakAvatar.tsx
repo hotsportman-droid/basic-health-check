@@ -6,7 +6,6 @@ import { DrRakSvgAvatar } from './DrRakSvgAvatar';
 import { Modal } from './Modal';
 
 // --- Types ---
-const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 type InteractionState = 'idle' | 'listening' | 'analyzing' | 'speaking';
 
 interface Analysis {
@@ -162,82 +161,90 @@ export const DrRakAvatar: React.FC = () => {
         }
     } catch (e) { console.error("Failed to load history:", e)}
 
+    // Initialize SpeechRecognition SAFELY inside useEffect
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
     if (!SpeechRecognition) {
       setStatusText('พิมพ์บอกอาการได้เลยนะคะ (เบราว์เซอร์นี้ไม่รองรับเสียง)');
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'th-TH';
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    recognitionRef.current = recognition;
+    try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'th-TH';
+        recognition.interimResults = true;
+        recognition.continuous = true;
+        recognitionRef.current = recognition;
 
-    recognition.onresult = (event: any) => {
-      if (stateRef.current !== 'listening') return;
+        recognition.onresult = (event: any) => {
+        if (stateRef.current !== 'listening') return;
 
-      if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
-
-      // --- Responsive Animation Logic ---
-      setIsUserSpeaking(true);
-      if (speakingVisualTimerRef.current) window.clearTimeout(speakingVisualTimerRef.current);
-      speakingVisualTimerRef.current = window.setTimeout(() => {
-          setIsUserSpeaking(false);
-      }, 600); // Reset visual speaking state after silence
-      // ----------------------------------
-
-      let finalTranscript = '';
-      let interimTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
-
-      if (finalTranscript) {
-        setSymptoms(prev => (prev + ' ' + finalTranscript).trim());
-      }
-
-      setStatusText(interimTranscript ? '... ' + interimTranscript : 'หมอฟังอยู่นะคะ... (พูดจบแล้วหยุดสักครู่)');
-
-      // Auto-submit after silence (slightly longer duration for better usability)
-      silenceTimerRef.current = window.setTimeout(() => {
-        if (symptomsRef.current.trim().length > 0) {
-            handleAnalysis();
-        }
-      }, 2500);
-    };
-    
-    recognition.onend = () => {
         if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
-        const currentState = stateRef.current;
-        
-        setIsUserSpeaking(false);
 
-        // If recognition stops unexpectedly while listening, check if we have input
-        if (currentState === 'listening') {
+        // --- Responsive Animation Logic ---
+        setIsUserSpeaking(true);
+        if (speakingVisualTimerRef.current) window.clearTimeout(speakingVisualTimerRef.current);
+        speakingVisualTimerRef.current = window.setTimeout(() => {
+            setIsUserSpeaking(false);
+        }, 600); // Reset visual speaking state after silence
+        // ----------------------------------
+
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+            } else {
+            interimTranscript += event.results[i][0].transcript;
+            }
+        }
+
+        if (finalTranscript) {
+            setSymptoms(prev => (prev + ' ' + finalTranscript).trim());
+        }
+
+        setStatusText(interimTranscript ? '... ' + interimTranscript : 'หมอฟังอยู่นะคะ... (พูดจบแล้วหยุดสักครู่)');
+
+        // Auto-submit after silence (slightly longer duration for better usability)
+        silenceTimerRef.current = window.setTimeout(() => {
             if (symptomsRef.current.trim().length > 0) {
                 handleAnalysis();
-            } else {
-                updateStateAndStatus('idle', 'กดปุ่มไมค์เพื่อเริ่มเล่าอาการใหม่นะคะ...');
             }
-        }
-    };
+        }, 2500);
+        };
+        
+        recognition.onend = () => {
+            if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
+            const currentState = stateRef.current;
+            
+            setIsUserSpeaking(false);
 
-    recognition.onerror = (event: any) => {
-        if (event.error !== 'aborted' && event.error !== 'no-speech') {
-            if (stateRef.current === 'listening') {
-                 updateStateAndStatus('idle', 'ระบบรับเสียงมีปัญหา ลองพิมพ์บอกหมอแทนได้นะคะ');
+            // If recognition stops unexpectedly while listening, check if we have input
+            if (currentState === 'listening') {
+                if (symptomsRef.current.trim().length > 0) {
+                    handleAnalysis();
+                } else {
+                    updateStateAndStatus('idle', 'กดปุ่มไมค์เพื่อเริ่มเล่าอาการใหม่นะคะ...');
+                }
             }
-        }
-    };
+        };
+
+        recognition.onerror = (event: any) => {
+            if (event.error !== 'aborted' && event.error !== 'no-speech') {
+                if (stateRef.current === 'listening') {
+                    updateStateAndStatus('idle', 'ระบบรับเสียงมีปัญหา ลองพิมพ์บอกหมอแทนได้นะคะ');
+                }
+            }
+        };
+    } catch (err) {
+        console.error("Speech Recognition Initialization Failed:", err);
+        setStatusText('พิมพ์บอกอาการได้เลยนะคะ (เสียงไม่พร้อมใช้งาน)');
+    }
 
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.abort();
+        try { recognitionRef.current.abort(); } catch(e) {}
       }
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
@@ -529,7 +536,9 @@ ${cleanDisplay(analysisResult.warning)}
   const saveHistory = (newItem: HistoryItem) => {
       setHistory(prev => {
           const newHistory = [newItem, ...prev].slice(0, 20);
-          localStorage.setItem('dr_rak_history', JSON.stringify(newHistory));
+          try {
+            localStorage.setItem('dr_rak_history', JSON.stringify(newHistory));
+          } catch(e) { console.error("Local Storage Error", e); }
           return newHistory;
       });
   };
@@ -537,7 +546,9 @@ ${cleanDisplay(analysisResult.warning)}
   const clearHistory = () => {
       if (window.confirm('ลบประวัติทั้งหมดไหมคะ?')) {
           setHistory([]);
-          localStorage.removeItem('dr_rak_history');
+          try {
+            localStorage.removeItem('dr_rak_history');
+          } catch(e) {}
       }
   }
 
@@ -806,17 +817,17 @@ ${cleanDisplay(analysisResult.warning)}
             </div>
             <h3 className="text-xl font-bold text-slate-800 mb-4">ข้อมูลและความเป็นส่วนตัว</h3>
             
-            <div className="text-left text-sm text-slate-600 space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-100 mb-6">
+            <div className="text-left text-sm text-slate-600 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
                 <div>
                     <p className="font-bold text-slate-800 mb-1 flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></span>1. การประมวลผลข้อมูล</p>
-                    <p className="pl-4 text-slate-500">เสียงและข้อความของคุณจะถูกส่งไปประมวลผลที่ AI (Google Gemini) เพื่อวิเคราะห์อาการ และจะ <strong className="text-slate-700">ไม่ถูกจัดเก็บถาวร</strong> บนเซิร์ฟเวอร์</p>
+                    <p className="pl-4 text-slate-500 text-xs">เสียงและข้อความจะถูกส่งไปประมวลผลที่ AI (Google Gemini) เพื่อวิเคราะห์อาการ และจะ <strong className="text-slate-700">ไม่ถูกจัดเก็บถาวร</strong> บนเซิร์ฟเวอร์</p>
                 </div>
                 <div>
                     <p className="font-bold text-slate-800 mb-1 flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></span>2. การจัดเก็บข้อมูล</p>
-                    <p className="pl-4 text-slate-500">ประวัติการสนทนาทั้งหมดถูกบันทึกไว้ใน <strong className="text-slate-700">อุปกรณ์นี้เท่านั้น (Local Storage)</strong> เพื่อให้คุณดูย้อนหลังได้สะดวก</p>
+                    <p className="pl-4 text-slate-500 text-xs">ประวัติการสนทนาบันทึกใน <strong className="text-slate-700">อุปกรณ์นี้เท่านั้น</strong></p>
                 </div>
                 <div className="pt-2 border-t border-slate-200/50">
-                     <p className="text-xs text-red-500">*ข้อมูลสุขภาพเป็นเรื่องละเอียดอ่อน โปรดระมัดระวังในการใช้งานในที่สาธารณะ</p>
+                     <p className="text-[10px] text-red-500">*ข้อมูลสุขภาพเป็นเรื่องละเอียดอ่อน โปรดระมัดระวังในการใช้งานในที่สาธารณะ</p>
                 </div>
             </div>
 

@@ -4,9 +4,8 @@ import { HealthCheckCard } from './components/HealthCheckCard';
 import { BMICalculator } from './components/BMICalculator';
 import { NearbyHospitals } from './components/NearbyHospitals';
 import { HEALTH_CHECKS } from './constants';
-import { StethoscopeIcon, ShareIcon, QrCodeIcon } from './components/icons';
+import { StethoscopeIcon, ShareIcon, QrCodeIcon, UserIcon } from './components/icons';
 import { ShareModal } from './components/ShareModal';
-import { Modal } from './components/Modal';
 import { DrRakAvatar } from './components/DrRakAvatar';
 import { QRCodeModal } from './components/QRCodeModal';
 import { InAppBrowserOverlay } from './components/InAppBrowserOverlay';
@@ -19,7 +18,6 @@ const App: React.FC = () => {
   const [openAccordion, setOpenAccordion] = useState<string | null>('pulse-check');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
-  const [isInstallInstructionOpen, setIsInstallInstructionOpen] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   
   const [totalFriends, setTotalFriends] = useState<number | string>('...');
@@ -35,7 +33,10 @@ const App: React.FC = () => {
       
       // Use a final, clean storage key to ensure everyone is recounted on this version
       const storageKey = `dr_rak_visited_vercel_upstash_final`;
-      const hasVisited = localStorage.getItem(storageKey);
+      let hasVisited = null;
+      try {
+        hasVisited = localStorage.getItem(storageKey);
+      } catch(e) { console.error("LocalStorage Access Denied"); }
 
       try {
         let response;
@@ -61,8 +62,10 @@ const App: React.FC = () => {
           
           // Only mark as visited AFTER a successful increment.
           if (!hasVisited) {
-            localStorage.setItem(storageKey, 'true');
-            console.log("[Counter] Successfully incremented and marked as visited.");
+            try {
+                localStorage.setItem(storageKey, 'true');
+                console.log("[Counter] Successfully incremented and marked as visited.");
+            } catch(e) { console.error("LocalStorage Write Denied"); }
           }
         } else {
             throw new Error('Invalid count format from server');
@@ -99,37 +102,25 @@ const App: React.FC = () => {
     setOpenAccordion(prevKey => (prevKey === key ? null : key));
   };
 
-  const pulseCheck = HEALTH_CHECKS.find(
-    (check) => check.title === 'การวัดชีพจร'
-  );
-  const respirationCheck = HEALTH_CHECKS.find(
-    (check) => check.title === 'การสังเกตการหายใจ'
-  );
-
-  const otherChecks = HEALTH_CHECKS.filter(
-    (check) =>
-      check.title !== 'การวัดชีพจร' &&
-      check.title !== 'การสังเกตการหายใจ'
-  );
-
   return (
     <>
       <InAppBrowserOverlay />
-      <div className="min-h-screen min-h-[100dvh] bg-slate-50 text-slate-800">
-        <header className="bg-slate-50/80 backdrop-blur-lg shadow-sm sticky top-0 z-20">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-700">
+        <header className="bg-slate-50/80 backdrop-blur-lg shadow-sm sticky top-0 z-30 transition-all duration-300 border-b border-slate-200/50">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-20">
-              <div className="flex items-center space-x-3">
-                <StethoscopeIcon className="h-8 w-8 text-indigo-500" />
-                <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">
+              <div className="flex items-center space-x-3 group cursor-default">
+                <div className="bg-indigo-100 p-2 rounded-xl group-hover:scale-105 transition-transform duration-300">
+                    <StethoscopeIcon className="h-7 w-7 text-indigo-600" />
+                </div>
+                <h1 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight group-hover:text-indigo-700 transition-colors">
                   สุขภาพดีกับหมอรักษ์
                 </h1>
               </div>
-              <div className="flex items-center space-x-2">
-                
+              <div className="flex items-center space-x-3">
                 <button
                   onClick={handleShare}
-                  className="flex items-center justify-center w-9 h-9 md:w-auto md:h-auto md:space-x-2 md:px-4 md:py-2 bg-slate-200 text-slate-800 text-sm font-semibold rounded-lg shadow-sm hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
+                  className="flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:space-x-2 md:px-4 md:py-2 bg-white border border-slate-200 text-slate-600 text-sm font-bold rounded-xl shadow-sm hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-600 focus:outline-none transition-all duration-200"
                   aria-label="แชร์แอปพลิเคชัน"
                 >
                   <ShareIcon className="w-5 h-5" />
@@ -138,7 +129,7 @@ const App: React.FC = () => {
                 
                 <button
                   onClick={() => setIsQRCodeModalOpen(true)}
-                  className="flex items-center justify-center w-9 h-9 md:w-auto md:h-auto md:space-x-2 md:px-4 md:py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
+                  className="flex items-center justify-center w-10 h-10 md:w-auto md:h-auto md:space-x-2 md:px-4 md:py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-md shadow-indigo-200 hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 focus:outline-none transition-all duration-200"
                   aria-label="QR Code สำหรับเข้าใช้งาน"
                 >
                   <QrCodeIcon className="w-5 h-5" />
@@ -149,140 +140,138 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <main className="container mx-auto p-4 sm:p-6 lg:p-8 pb-24">
           
           {/* Beautiful Banner Section */}
-          <section className="relative overflow-hidden isolate rounded-3xl bg-gradient-to-br from-indigo-600 via-blue-600 to-teal-500 text-white shadow-xl shadow-indigo-200 mb-10 p-8 md:p-16 text-center transition-transform hover:scale-[1.01] duration-500 transform-gpu">
-              {/* Decorative Background Elements */}
-              <div className="absolute top-0 left-0 -translate-x-1/4 -translate-y-1/4 w-96 h-96 bg-white opacity-10 rounded-full blur-3xl pointer-events-none"></div>
-              <div className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 w-96 h-96 bg-teal-400 opacity-20 rounded-full blur-3xl pointer-events-none"></div>
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjwvc3ZnPg==')] [mask-image:radial-gradient(black,transparent_70%)] pointer-events-none"></div>
-
-              <div className="relative z-10 flex flex-col items-center">
-                <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 text-sm font-bold text-indigo-50 bg-white/10 backdrop-blur-md rounded-full border border-white/20 shadow-sm">
-                    <span className="flex h-2.5 w-2.5 rounded-full bg-teal-300 mr-2 animate-pulse shadow-[0_0_8px_rgba(45,212,191,0.8)]"></span>
-                    เพื่อนหมอรักษ์ {typeof totalFriends === 'number' ? totalFriends.toLocaleString() : totalFriends} คน
-                </div>
-                
-                <h2 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 drop-shadow-md leading-tight">
-                    สุขภาพดีเริ่มต้นที่<br/>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-white">การดูแลตัวเอง</span>
-                </h2>
-                
-                <p className="text-indigo-100 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed font-medium opacity-90">
-                    คู่มือตรวจเช็คสุขภาพอัจฉริยะ เพื่อความอุ่นใจของคุณและครอบครัว
-                </p>
-              </div>
+          <section className="relative overflow-hidden isolate rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-2xl mb-10 sm:mb-14 ring-1 ring-white/10">
+             {/* Abstract Background Shapes */}
+             <div className="absolute -top-24 -right-24 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
+             <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl"></div>
+             
+             <div className="relative z-10 px-6 py-12 md:py-16 md:px-12 flex flex-col md:flex-row items-center justify-between gap-8">
+                 <div className="max-w-2xl text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm text-xs font-bold text-indigo-100 mb-6">
+                        <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                        AI Health Assistant
+                     </div>
+                     <h2 className="text-3xl md:text-5xl font-bold mb-6 leading-tight tracking-tight">
+                        ปรึกษาปัญหาสุขภาพกับ <br/>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-indigo-200">
+                            "หมอรักษ์" AI อัจฉริยะ
+                        </span>
+                     </h2>
+                     <p className="text-indigo-100 text-lg md:text-xl mb-8 leading-relaxed max-w-xl mx-auto md:mx-0">
+                        เพื่อนคู่คิดเรื่องสุขภาพ พูดคุยได้เหมือนคนจริง ให้คำแนะนำเบื้องต้นตลอด 24 ชม. 
+                        <span className="block mt-2 text-base opacity-80 font-medium">
+                            * ข้อมูลของคุณจะถูกเก็บเป็นความลับในเครื่องเท่านั้น
+                        </span>
+                     </p>
+                     <button 
+                        onClick={() => document.getElementById('ai-consult')?.scrollIntoView({ behavior: 'smooth' })}
+                        className="bg-white text-indigo-700 px-8 py-4 rounded-xl font-bold text-lg shadow-lg shadow-indigo-900/20 hover:bg-indigo-50 hover:scale-105 hover:shadow-xl transition-all duration-300 active:scale-95"
+                     >
+                        เริ่มปรึกษาหมอรักษ์เลย
+                     </button>
+                 </div>
+                 <div className="hidden md:block relative">
+                    {/* Decorative element for desktop */}
+                    <div className="w-64 h-64 bg-gradient-to-tr from-white/20 to-transparent rounded-full backdrop-blur-md border border-white/10 flex items-center justify-center animate-subtle-bounce">
+                        <StethoscopeIcon className="w-32 h-32 text-white/80" />
+                    </div>
+                 </div>
+             </div>
           </section>
 
-          {/* Dr.Rak Avatar Chat Section - The Highlight */}
-          <section className="mb-10">
-            <DrRakAvatar />
-          </section>
+           {/* Dr Rak Avatar Section */}
+           <section className="mb-16 scroll-mt-28" id="ai-consult">
+             <DrRakAvatar />
+           </section>
 
-          {/* Primary Tools Section */}
-          <section className="mb-12">
-              <div className="grid grid-cols-1 gap-6 md:gap-8 items-start max-w-xl mx-auto">
-                  <NearbyHospitals />
-              </div>
-          </section>
+           {/* Health Checks Grid */}
+           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+             
+             {/* Left Column: Health Checks List */}
+             <div className="lg:col-span-8 space-y-6">
+               <div className="flex items-center space-x-3 mb-6 px-2">
+                  <div className="h-8 w-1 bg-indigo-500 rounded-full"></div>
+                  <h2 className="text-2xl font-bold text-slate-800">เช็คสุขภาพด้วยตัวเอง</h2>
+               </div>
+               
+               {/* BMI Calculator */}
+               <BMICalculator 
+                  isOpen={openAccordion === 'bmi-calc'} 
+                  onToggle={() => handleToggle('bmi-calc')} 
+               />
 
-          {/* Self-Check Guides Section */}
-          <section>
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-slate-700">คู่มือการตรวจเช็คเบื้องต้น</h3>
-              <p className="text-slate-500 mt-1">ขั้นตอนการสังเกตสุขภาพด้านต่างๆ ด้วยตนเอง</p>
-            </div>
-            <div className="max-w-3xl mx-auto space-y-4">
-              {pulseCheck && (
-                <HealthCheckCard
-                  key="pulse-check"
-                  icon={<StethoscopeIcon />}
-                  title={pulseCheck.title}
-                  description={pulseCheck.description}
-                  steps={pulseCheck.steps}
-                  isOpen={openAccordion === 'pulse-check'}
-                  onToggle={() => handleToggle('pulse-check')}
-                />
-              )}
-              {respirationCheck && (
-                <HealthCheckCard
-                  key="respiration-check"
-                  icon={<StethoscopeIcon />}
-                  title={respirationCheck.title}
-                  description={respirationCheck.description}
-                  steps={respirationCheck.steps}
-                  isOpen={openAccordion === 'respiration-check'}
-                  onToggle={() => handleToggle('respiration-check')}
-                />
-              )}
-              {otherChecks.map((check) => (
-                <HealthCheckCard
-                  key={check.title}
-                  icon={check.icon}
-                  title={check.title}
-                  description={check.description}
-                  steps={check.steps}
-                  isOpen={openAccordion === check.title}
-                  onToggle={() => handleToggle(check.title)}
-                />
-              ))}
-              <BMICalculator 
-                isOpen={openAccordion === 'bmi-calculator'}
-                onToggle={() => handleToggle('bmi-calculator')}
-              />
-            </div>
-          </section>
+               {/* Health Check Cards */}
+               {HEALTH_CHECKS.map((check, index) => (
+                 <HealthCheckCard
+                   key={index}
+                   {...check}
+                   isOpen={openAccordion === `check-${index}`}
+                   onToggle={() => handleToggle(`check-${index}`)}
+                 />
+               ))}
+             </div>
 
+             {/* Right Column: Hospitals & Info (Sticky) */}
+             <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
+               <NearbyHospitals />
+               
+               {/* Friend Counter Card */}
+               <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group">
+                  <div className="absolute -right-6 -top-6 w-24 h-24 bg-white/10 rounded-full blur-xl group-hover:scale-150 transition-transform duration-700"></div>
+                  <div className="flex items-center justify-between relative z-10">
+                      <div>
+                          <p className="text-indigo-100 text-sm font-medium mb-1">เพื่อนรักสุขภาพ</p>
+                          <p className="text-4xl font-bold tracking-tight">{totalFriends}</p>
+                          <p className="text-xs text-indigo-200 mt-2">คนใช้งานแอปฯ วันนี้</p>
+                      </div>
+                      <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
+                          <UserIcon className="w-8 h-8 text-white" />
+                      </div>
+                  </div>
+               </div>
+
+               {/* Install Prompt for iOS (Conditional) */}
+               {isIOS && (
+                   <div className="bg-slate-100 rounded-xl p-5 border border-slate-200 text-center">
+                       <p className="font-bold text-slate-800 mb-2">เคล็ดลับสำหรับ iPhone</p>
+                       <p className="text-sm text-slate-600 mb-3">
+                           ติดตั้งแอปฯ ไว้บนหน้าจอหลักเพื่อการใช้งานที่เต็มจอและสะดวกยิ่งขึ้น
+                       </p>
+                       <div className="flex items-center justify-center gap-2 text-xs text-slate-500 bg-white p-2 rounded-lg border border-slate-200 mx-auto w-fit">
+                           <span>แตะปุ่มแชร์</span>
+                           <ShareIcon className="w-4 h-4" />
+                           <span>แล้วเลือก "เพิ่มไปยังหน้าจอโฮม"</span>
+                       </div>
+                   </div>
+               )}
+             </div>
+           </div>
         </main>
 
-        <footer className="bg-white mt-16 py-8 border-t border-slate-200">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-slate-500 text-sm">
-            <p className="font-semibold text-red-600 mb-2">ข้อควรระวัง</p>
-            <p className="max-w-2xl mx-auto mb-6">
-              ข้อมูลในแอปพลิเคชันนี้เป็นเพียงคำแนะนำเบื้องต้น
-              ไม่สามารถใช้แทนการวินิจฉัยหรือการรักษาจากแพทย์ผู้เชี่ยวชาญได้
-              หากมีความกังวลเกี่ยวกับสุขภาพ ควรปรึกษาแพทย์เสมอ
-            </p>
-            <div className="border-t border-slate-100 pt-6">
-              <p className="text-slate-400 font-medium">
-                &copy; {new Date().getFullYear()} ลิขสิทธิ์เป็นของ บริษัท ดู กรุ๊ป (ไทยแลนด์) จำกัด
-              </p>
+        <footer className="bg-slate-800 text-slate-400 py-12 mt-12">
+            <div className="container mx-auto px-4 text-center space-y-6">
+                <div className="flex items-center justify-center gap-2 mb-4">
+                    <StethoscopeIcon className="w-6 h-6 text-indigo-400" />
+                    <span className="font-bold text-slate-200 text-lg">สุขภาพดีกับหมอรักษ์</span>
+                </div>
+                <p className="text-sm max-w-md mx-auto leading-relaxed opacity-80">
+                    แอปพลิเคชันนี้จัดทำขึ้นเพื่อให้ข้อมูลเบื้องต้นเท่านั้น 
+                    ไม่สามารถทดแทนคำแนะนำ การวินิจฉัย หรือการรักษาจากแพทย์ผู้เชี่ยวชาญได้ 
+                    หากมีอาการเจ็บป่วยรุนแรง โปรดไปพบแพทย์ทันที
+                </p>
+                <div className="w-16 h-1 bg-slate-700 mx-auto rounded-full"></div>
+                <p className="text-xs">
+                    © {new Date().getFullYear()} บริษัท ดู กรุ๊ป (ไทยแลนด์) จำกัด. สงวนลิขสิทธิ์.
+                </p>
             </div>
-          </div>
         </footer>
+
+        <ShareModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
+        <QRCodeModal isOpen={isQRCodeModalOpen} onClose={() => setIsQRCodeModalOpen(false)} />
       </div>
-      <ShareModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
-      <QRCodeModal isOpen={isQRCodeModalOpen} onClose={() => setIsQRCodeModalOpen(false)} />
-      
-      {/* Install Instruction Modal - Kept for manual trigger fallback if needed, though currently unused via button */}
-      <Modal isOpen={isInstallInstructionOpen} onClose={() => setIsInstallInstructionOpen(false)}>
-         <div className="text-center p-2">
-             <h3 className="text-xl font-bold text-slate-800 mb-4">
-                 {isIOS ? 'วิธีติดตั้งบน iOS' : 'วิธีติดตั้งแอป'}
-             </h3>
-             
-             {isIOS ? (
-                 <div className="space-y-4 text-left text-slate-600 text-sm">
-                     <p>1. แตะที่ปุ่ม <strong>แชร์</strong> <span className="inline-block"><ShareIcon className="w-4 h-4 inline text-blue-500"/></span> ที่แถบด้านล่างของ Safari</p>
-                     <p>2. เลื่อนลงมาและเลือก <strong>"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen)</strong></p>
-                     <p>3. กดปุ่ม <strong>"เพิ่ม" (Add)</strong> ที่มุมขวาบน</p>
-                 </div>
-             ) : (
-                 <div className="space-y-4 text-center text-slate-600 text-sm">
-                     <p>กรุณากดที่เมนูของเบราว์เซอร์ (สัญลักษณ์จุดสามจุด หรือ ขีดสามขีด)</p>
-                     <p>แล้วเลือกเมนู <strong>"ติดตั้งแอป"</strong> หรือ <strong>"เพิ่มลงในหน้าจอหลัก"</strong></p>
-                 </div>
-             )}
-             
-             <button
-                onClick={() => setIsInstallInstructionOpen(false)}
-                className="mt-6 w-full bg-slate-200 text-slate-800 font-bold py-2 rounded-lg hover:bg-slate-300 transition-colors"
-             >
-                 เข้าใจแล้ว
-             </button>
-         </div>
-      </Modal>
     </>
   );
 };

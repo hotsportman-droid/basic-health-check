@@ -6,7 +6,7 @@
     <link rel="apple-touch-icon" href="/vite.svg" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>คู่มือตรวจสุขภาพด้วยตนเอง</title>
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#4f46e5"/>
@@ -27,6 +27,9 @@
         -webkit-backdrop-filter: blur(16px);
       }
     </style>
+
+    <!-- ES Module Shims: Critical for iOS < 16.4 support to prevent white screen -->
+    <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js"></script>
 
 <script type="importmap">
 {
