@@ -41,6 +41,24 @@ const MEDICATIONS: Medication[] = [
     sideEffect: 'ง่วงนอน, ปากแห้ง, ตาพร่ามัว'
   },
   {
+    id: 'charcoal',
+    name: 'ผงถ่าน (Activated Charcoal)',
+    genericName: 'Activated Carbon',
+    indication: 'ดูดซับสารพิษ แก้ท้องเสีย อาหารเป็นพิษ ท้องอืด',
+    usage: 'ทานครั้งละ 2-4 เม็ด (ตามฉลาก) ทานทันทีที่มีอาการ, ควรทานห่างจากยาอื่น 2 ชม.',
+    warning: 'ห้ามใช้ในผู้ที่มีลำไส้อุดตัน, อุจจาระจะมีสีดำซึ่งเป็นปกติ',
+    sideEffect: 'ท้องผูก, อาเจียน'
+  },
+  {
+    id: 'dimenhydrinate',
+    name: 'ยาแก้เมารถ (Dimenhydrinate)',
+    genericName: 'Dimenhydrinate',
+    indication: 'ป้องกันและบรรเทาอาการเมารถ เมาเรือ คลื่นไส้ อาเจียน',
+    usage: 'ทานครั้งละ 1 เม็ด ก่อนออกเดินทาง 30 นาที',
+    warning: 'ทำให้ง่วงนอนมาก ห้ามขับรถหรือทำงานกับเครื่องจักร',
+    sideEffect: 'ปากแห้ง, ตาพร่า, ง่วงซึม'
+  },
+  {
     id: 'simethicone',
     name: 'ยาแก้ท้องอืด (Simethicone)',
     genericName: 'Simethicone',
@@ -59,6 +77,15 @@ const MEDICATIONS: Medication[] = [
     sideEffect: 'บวมน้ำ, ความดันโลหิตสูง (หากทานมากเกินไปในผู้ป่วยเฉพาะกลุ่ม)'
   },
   {
+    id: 'mucolytic',
+    name: 'ยาละลายเสมหะ (Acetylcysteine)',
+    genericName: 'Acetylcysteine (NAC) / Bromhexine',
+    indication: 'ละลายเสมหะเหนียวข้น บรรเทาอาการไอมีเสมหะ',
+    usage: 'ชนิดเม็ดฟู่: ละลายน้ำทานวันละ 1 ครั้ง, ชนิดเม็ด: ทานวันละ 3 ครั้ง',
+    warning: 'ระมัดระวังในผู้ป่วยโรคกระเพาะอาหาร (อาจระคายเคือง)',
+    sideEffect: 'คลื่นไส้, อาเจียน, ระคายเคืองกระเพาะ'
+  },
+  {
     id: 'antacid',
     name: 'ยาลดกรด (Antacid)',
     genericName: 'Aluminum Hydroxide / Magnesium Hydroxide',
@@ -66,6 +93,15 @@ const MEDICATIONS: Medication[] = [
     usage: 'เคี้ยวให้ละเอียดก่อนกลืน หรือเขย่าขวดก่อนดื่ม ทานก่อนหรือหลังอาหาร 1 ชม.',
     warning: 'ระวังในผู้ป่วยโรคไต',
     sideEffect: 'อาจทำให้ท้องผูก (Aluminum) หรือท้องเสีย (Magnesium)'
+  },
+  {
+    id: 'calamine',
+    name: 'คาลาไมน์ (Calamine)',
+    genericName: 'Calamine Lotion',
+    indication: 'บรรเทาอาการคัน ผดผื่น ลมพิษ แมลงกัดต่อย',
+    usage: 'เขย่าขวดก่อนใช้ ทาบางๆ บริเวณที่มีอาการ วันละ 3-4 ครั้ง (ยาใช้ภายนอก)',
+    warning: 'ห้ามรับประทาน, ห้ามทาบนแผลสดหรือผิวหนังที่มีน้ำเหลือง',
+    sideEffect: 'ผิวแห้งตึง (หากทามากเกินไป)'
   }
 ];
 
@@ -104,7 +140,7 @@ export const MedicationGuide: React.FC = () => {
                  <input
                      type="text"
                      className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm transition-all shadow-sm"
-                     placeholder="ค้นหาชื่อยา หรืออาการ (เช่น ปวดหัว, ท้องอืด)"
+                     placeholder="ค้นหาชื่อยา หรืออาการ (เช่น แก้แพ้, เมารถ)"
                      value={searchTerm}
                      onChange={(e) => setSearchTerm(e.target.value)}
                  />

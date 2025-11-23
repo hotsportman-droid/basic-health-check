@@ -64,7 +64,7 @@ const HistoryItemCard: React.FC<{ item: HistoryItem }> = ({ item }) => {
             </button>
 
             <div 
-                className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}
+                className={`overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'}`}
             >
                 <div className="p-5 pt-0 space-y-4">
                     <div className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mb-2"></div>
@@ -74,7 +74,7 @@ const HistoryItemCard: React.FC<{ item: HistoryItem }> = ({ item }) => {
                          <h6 className="text-xs font-bold text-slate-900 flex items-center gap-2 mb-2 uppercase tracking-wider opacity-80">
                             <CheckCircleIcon className="w-4 h-4 text-teal-500"/> ผลการประเมิน
                         </h6>
-                        <p className="text-sm text-slate-600 leading-relaxed pl-6">
+                        <p className="text-sm text-slate-600 leading-relaxed pl-6 whitespace-pre-line">
                             {cleanDisplay(item.analysis.assessment)}
                         </p>
                     </div>
@@ -95,7 +95,7 @@ const HistoryItemCard: React.FC<{ item: HistoryItem }> = ({ item }) => {
                              <h6 className="text-xs font-bold text-red-600 flex items-center gap-2 mb-2 uppercase tracking-wider">
                                 <ExclamationIcon className="w-4 h-4"/> ข้อควรระวัง
                             </h6>
-                            <p className="text-sm text-red-800/80 leading-relaxed pl-1">
+                            <p className="text-sm text-red-800/80 leading-relaxed pl-1 whitespace-pre-line">
                                 {cleanDisplay(item.analysis.warning)}
                             </p>
                         </div>
@@ -774,46 +774,50 @@ ${cleanDisplay(analysisResult.warning)}
       
       {/* History Section */}
       <div className="bg-white border-t border-slate-200">
-         <button
-            onClick={() => setIsHistoryOpen(o => !o)}
-            className="w-full p-4 text-left flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 hover:bg-slate-50 transition-colors group"
-            aria-expanded={isHistoryOpen}
-          >
-            <div className="flex items-center">
-              <HistoryIcon className="w-5 h-5 text-slate-500 mr-3 group-hover:text-indigo-600 transition-colors"/>
-              <h4 className="font-bold text-slate-700 text-sm group-hover:text-indigo-700 transition-colors">ประวัติการปรึกษา ({history.length})</h4>
-            </div>
-            <div className={`w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center transition-all duration-300 ${isHistoryOpen ? 'bg-indigo-100 rotate-180' : 'group-hover:bg-indigo-50'}`}>
-                <ChevronDownIcon className={`w-5 h-5 transition-colors ${isHistoryOpen ? 'text-indigo-600' : 'text-slate-400'}`} />
-            </div>
-        </button>
+         <div className="flex items-center justify-between p-4 bg-white z-10 relative">
+             <button
+                onClick={() => setIsHistoryOpen(o => !o)}
+                className="flex-1 text-left flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 group"
+                aria-expanded={isHistoryOpen}
+              >
+                <HistoryIcon className="w-5 h-5 text-slate-500 mr-3 group-hover:text-indigo-600 transition-colors"/>
+                <h4 className="font-bold text-slate-700 text-sm group-hover:text-indigo-700 transition-colors mr-3">ประวัติการปรึกษา ({history.length})</h4>
+                <div className={`w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center transition-all duration-300 ${isHistoryOpen ? 'bg-indigo-100 rotate-180' : 'group-hover:bg-indigo-50'}`}>
+                    <ChevronDownIcon className={`w-4 h-4 transition-colors ${isHistoryOpen ? 'text-indigo-600' : 'text-slate-400'}`} />
+                </div>
+            </button>
+            
+            {/* Clear History Button - Visible in Header when items exist */}
+            {history.length > 0 && isHistoryOpen && (
+                 <button 
+                    onClick={clearHistory} 
+                    className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-bold px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg transition-colors ml-2 shrink-0"
+                >
+                    <TrashIcon className="w-3.5 h-3.5" />
+                    ล้างประวัติ
+               </button>
+            )}
+         </div>
         
-        <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isHistoryOpen ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}>
-            <div className="p-6 pt-0 bg-slate-50/30 border-t border-slate-100">
-                {history.length > 0 ? (
-                    <div className="space-y-4 py-4">
-                        {history.map(item => (
-                            <HistoryItemCard key={item.id} item={item} />
-                        ))}
-                        <div className="text-center pt-4">
-                           <button 
-                                onClick={clearHistory} 
-                                className="inline-flex items-center text-xs text-red-500 hover:text-red-700 font-bold px-4 py-2 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                            >
-                                <TrashIcon className="w-3.5 h-3.5 mr-2" />
-                                ล้างประวัติทั้งหมด
-                           </button>
+        <div className={`transition-all duration-500 ease-in-out ${isHistoryOpen ? 'max-h-[60vh] opacity-100' : 'max-h-0 opacity-0'}`}>
+            <div className="overflow-y-auto max-h-[60vh] scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                <div className="p-4 pt-0 bg-slate-50/30 border-t border-slate-100">
+                    {history.length > 0 ? (
+                        <div className="space-y-4 py-4">
+                            {history.map(item => (
+                                <HistoryItemCard key={item.id} item={item} />
+                            ))}
                         </div>
-                    </div>
-                ) : (
-                    <div className="text-center py-10 text-slate-400 flex flex-col items-center">
-                        <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
-                            <HistoryIcon className="w-6 h-6 text-slate-300" />
+                    ) : (
+                        <div className="text-center py-10 text-slate-400 flex flex-col items-center">
+                            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                                <HistoryIcon className="w-6 h-6 text-slate-300" />
+                            </div>
+                            <p className="text-sm font-medium">ยังไม่มีประวัติการปรึกษา</p>
+                            <p className="text-xs mt-1 opacity-70">ประวัติจะแสดงที่นี่หลังจากคุณคุยกับหมอรักษ์</p>
                         </div>
-                        <p className="text-sm font-medium">ยังไม่มีประวัติการปรึกษา</p>
-                        <p className="text-xs mt-1 opacity-70">ประวัติจะแสดงที่นี่หลังจากคุณคุยกับหมอรักษ์</p>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
       </div>
