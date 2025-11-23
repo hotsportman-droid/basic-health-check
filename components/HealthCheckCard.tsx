@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { ChevronDownIcon } from './icons';
+import React, { useState, useEffect } from 'react';
+import { ChevronDownIcon, HistoryIcon, TrashIcon } from './icons';
 
 interface HealthCheckCardProps {
   icon: React.ReactNode;
@@ -11,7 +11,58 @@ interface HealthCheckCardProps {
   onToggle: () => void;
 }
 
+interface CheckHistoryItem {
+    id: number;
+    date: string;
+    result: string;
+}
+
 export const HealthCheckCard: React.FC<HealthCheckCardProps> = ({ icon, title, description, steps, isOpen, onToggle }) => {
+  const [note, setNote] = useState('');
+  const [history, setHistory] = useState<CheckHistoryItem[]>([]);
+
+  // Load history from local storage on mount or title change
+  useEffect(() => {
+    try {
+        const key = `shc_history_${title}`;
+        const saved = localStorage.getItem(key);
+        if (saved) setHistory(JSON.parse(saved));
+    } catch(e) {
+        console.error("Error loading history", e);
+    }
+  }, [title]);
+
+  const handleSave = () => {
+      if (!note.trim()) return;
+      
+      const newItem: CheckHistoryItem = {
+          id: Date.now(),
+          date: new Date().toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }),
+          result: note.trim()
+      };
+
+      const newHistory = [newItem, ...history];
+      setHistory(newHistory);
+      try {
+        localStorage.setItem(`shc_history_${title}`, JSON.stringify(newHistory));
+      } catch(e) {}
+      setNote('');
+  };
+
+  const handleDelete = (id: number) => {
+      const newHistory = history.filter(h => h.id !== id);
+      setHistory(newHistory);
+      try {
+        localStorage.setItem(`shc_history_${title}`, JSON.stringify(newHistory));
+      } catch(e) {}
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+          handleSave();
+      }
+  };
+
   return (
     <div
       className={`bg-white rounded-xl shadow-md border border-slate-200/80 overflow-hidden transition-all duration-300 ease-in-out ${
@@ -79,6 +130,55 @@ export const HealthCheckCard: React.FC<HealthCheckCardProps> = ({ icon, title, d
                     ))}
                     </ul>
                  </div>
+
+                 {/* History Section */}
+                 <div className="mt-8 pt-6 border-t border-slate-100">
+                    <h4 className="font-bold text-slate-800 mb-3 text-sm flex items-center">
+                        <HistoryIcon className="w-4 h-4 mr-2 text-indigo-500" />
+                        บันทึกผลการตรวจ (History)
+                    </h4>
+                    
+                    <div className="flex gap-2 mb-4">
+                        <input 
+                            type="text" 
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder="ระบุผล (เช่น 80, ปกติ, ไม่พบความผิดปกติ)"
+                            className="flex-1 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                        />
+                        <button 
+                            onClick={handleSave}
+                            className="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                        >
+                            บันทึก
+                        </button>
+                    </div>
+
+                    {history.length > 0 ? (
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                            {history.map(item => (
+                                <div key={item.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm hover:border-indigo-100 transition-colors">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-indigo-500 font-bold mb-0.5">{item.date}</span>
+                                        <span className="text-slate-700 font-medium">{item.result}</span>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleDelete(item.id)} 
+                                        className="text-slate-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-md transition-colors"
+                                        title="ลบรายการ"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-slate-400 text-center py-2 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                            ยังไม่มีประวัติการบันทึก
+                        </p>
+                    )}
+                </div>
              </div>
           </div>
         </div>

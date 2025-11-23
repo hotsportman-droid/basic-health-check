@@ -9,6 +9,7 @@ import { ShareModal } from './components/ShareModal';
 import { DrRakAvatar } from './components/DrRakAvatar';
 import { QRCodeModal } from './components/QRCodeModal';
 import { InAppBrowserOverlay } from './components/InAppBrowserOverlay';
+import { MedicationGuide } from './components/MedicationGuide';
 
 // --- Final, Vercel-Native Unique Visitor Counter ---
 const BASE_FRIEND_COUNT = 450;
@@ -212,6 +213,11 @@ const App: React.FC = () => {
                    onToggle={() => handleToggle(`check-${index}`)}
                  />
                ))}
+
+               {/* New Medication Guide Section */}
+               <div className="pt-8">
+                 <MedicationGuide />
+               </div>
              </div>
 
              {/* Right Column: Hospitals & Info (Sticky) */}

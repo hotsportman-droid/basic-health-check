@@ -64,7 +64,7 @@ export const MouthIcon: React.FC<{ className?: string }> = ({ className }) => (
 export const BrainIcon: React.FC<{ className?: string }> = ({ className }) => (
   <IconWrapper className={className}>
     <path d="M9.5 2c-2.5 0-4.5 2-4.5 4.5 0 1 .5 2 1 2.5-1.5 1-2 3-2 4.5 0 2.5 2 4.5 4.5 4.5.5 0 1-.1 1.5-.2 1 1.5 3 2.2 5 1.2 1.5 1 3.5 1 5-1 1.5 1.5 4 1.5 4.5 0 2.5 0 4.5-2 4.5-4.5 0-1.5-.5-3.5-2-4.5.5-.5 1-1.5 1-2.5 0-2.5-2-4.5-4.5-4.5-1 0-2 .5-2.5 1-.5-1.5-2.5-3-4.5-3-1.5 0-3 .5-3.5 2-.5-.5-1.5-1-2.5-1z"></path>
-    <path d="M12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+    <path d="M12 12a2 2 0 1 0 0-4 2 2 0 0 0 4z"></path>
   </IconWrapper>
 );
 
@@ -233,5 +233,18 @@ export const ShieldCheckIcon: React.FC<{ className?: string }> = ({ className })
 export const TrashIcon: React.FC<{ className?: string }> = ({ className }) => (
   <IconWrapper className={className}>
     <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </IconWrapper>
+);
+
+export const PillIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <IconWrapper className={className}>
+    <path d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m15.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.727l1.586 5.546a1 1 0 01-.961 1.273H10.5M15 9h-1.246a1 1 0 00-.961.727l-1.586 5.546a1 1 0 00.961 1.273H13.5"></path>
+    <path d="M7 12h10" opacity="0.4"></path>
+  </IconWrapper>
+);
+
+export const SearchIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <IconWrapper className={className}>
+    <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
   </IconWrapper>
 );
